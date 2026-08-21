@@ -1,0 +1,28 @@
+# Project TODO
+
+- [x] Define domain model and source-monitoring lifecycle for configured, paused, retired, healthy, degraded, and failed sources.
+- [x] Design and apply database schema for sources, source policies, schedules, fetch runs, artifacts, observations, content versions, change events, classifications, evidence, reviews, notifications, workflow executions, and operational metrics.
+- [x] Implement protected source management APIs for adding, editing, pausing, resuming, retiring, and listing monitored sources.
+- [x] Implement permitted source fetching for JSON APIs, HTML pages, RSS feeds, and plain-text sources with safe request validation, timeouts, response metadata, and rate controls.
+- [x] Implement source-specific normalization, configurable volatility removal, canonical content generation, and stable hashing.
+- [x] Implement idempotent observation, content-version, structured-diff, and change-event creation with baseline, no-change, cosmetic, and material classifications.
+- [x] Preserve raw, normalized, and diff evidence snapshots in object storage and link all evidence to auditable database records.
+- [x] Implement durable scheduled source checks using platform-managed cron callbacks, with pause/resume synchronization and safe task ownership.
+- [x] Implement retries, failure classification, stuck-run detection, dead-letter-style recovery records, and scheduled reconciliation.
+- [x] Implement append-only human review decisions; require review confirmation before a candidate material change is marked confirmed.
+- [x] Send an immediate owner notification when a material change is confirmed and retain notification delivery status for retries.
+- [x] Implement an optional, advisory-only structured LLM explanation with JSON schema validation, confidence, cost controls, and no automated action path.
+- [x] Build a source management interface with source form validation, schedule controls, parser/ignore/materiality policies, and safe lifecycle actions.
+- [x] Build a polished dashboard with source health, success and failure rates, pending reviews, recent changes, execution history, and meaningful empty/loading/error states.
+- [x] Build a change-review experience with before/after evidence, structured diff, hashes, advisory explanation, and explicit human decisions.
+- [x] Build execution and evidence detail views with auditable timelines and recovery information.
+- [ ] Add integration-level Vitest coverage for database-backed idempotency, owner-notification delivery retries, and advisory invocation persistence.
+- [x] Verify the dashboard on desktop and mobile, resolve runtime or console errors, and document real-world setup, source eligibility, deployment, and operations.
+- [x] Add explicit per-source request-rate controls, content-type validation, and safe retry/backoff behavior beyond schedule frequency.
+- [x] Record suppressed no-change events with structured evidence while retaining idempotent observation processing.
+- [x] Persist dead-letter-style recovery records for stuck fetch runs and failed owner-notification delivery, then surface them in operations.
+- [x] Add advisory LLM cost controls with a declared model, daily request cap, and transparent UI disclosure.
+- [x] Build an execution-detail and recovery timeline view for fetch runs, artifacts, errors, retries, and reconciliation records.
+- [x] Expand focused Vitest coverage for canonicalization, rate control, review confirmation, and advisory guardrails.
+- [x] Surface notification-linked recovery records in Operations and cover their audit visibility with a focused test.
+- [x] Add a database-backed router test that verifies a notification-linked recovery record is returned only to its owning user's Operations recovery queue.

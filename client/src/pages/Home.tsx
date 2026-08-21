@@ -1,33 +1,24 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { trpc } from "@/lib/trpc";
+import { Activity, ArrowUpRight, CheckCircle2, CircleAlert, Database, Plus, Radar, ShieldCheck } from "lucide-react";
+import { useLocation } from "wouter";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
+function formatDate(value: Date | string | null | undefined) { return value ? new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Not yet"; }
+
 export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
-
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
-  );
+  const [, setLocation] = useLocation();
+  const dashboard = trpc.monitoring.dashboard.useQuery(undefined, { refetchInterval: 30_000 });
+  const data = dashboard.data;
+  const metrics = data?.metrics ?? { active: 0, healthy: 0, degraded: 0, failed: 0, pendingReviews: 0, successRate: 0 };
+  const metricCards = [
+    { label: "Active sources", value: metrics.active, hint: "Scheduled & monitored", icon: Radar, tone: "text-primary" },
+    { label: "Source health", value: `${metrics.healthy}/${Math.max(data?.sources.length ?? 0, 0)}`, hint: metrics.failed ? `${metrics.failed} needs attention` : "No critical failures", icon: ShieldCheck, tone: metrics.failed ? "text-rose-300" : "text-emerald-300" },
+    { label: "Pending review", value: metrics.pendingReviews, hint: "Human decision required", icon: CircleAlert, tone: metrics.pendingReviews ? "text-amber-200" : "text-slate-300" },
+    { label: "Fetch success", value: `${metrics.successRate}%`, hint: "Recent completed runs", icon: CheckCircle2, tone: "text-sky-200" },
+  ];
+  return <div className="mx-auto max-w-[1500px] space-y-6 pb-20 lg:pb-0"><section className="reveal surface soft-border overflow-hidden rounded-3xl p-6 sm:p-8"><div className="relative z-10 max-w-3xl"><p className="data-label text-primary">Monitoring control plane</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.05em] sm:text-4xl">Know what changed.<br /><span className="text-slate-400">Keep the evidence.</span></h1><p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">A focused research-intelligence workspace for monitoring approved external sources, separating failures from silence, and requiring human confirmation before a material change is escalated.</p><div className="mt-7 flex flex-wrap gap-3"><Button onClick={() => setLocation("/sources")} className="gap-2"><Plus className="h-4 w-4" /> Add a source</Button><Button variant="outline" onClick={() => setLocation("/changes")} className="border-white/14 bg-white/4 text-slate-100 hover:bg-white/8 hover:text-white">Review changes <ArrowUpRight className="ml-1 h-4 w-4" /></Button></div></div><div className="absolute right-8 top-6 hidden h-32 w-32 rounded-full border border-primary/25 bg-primary/7 blur-[1px] md:block" /></section>
+  <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(card => { const Icon = card.icon; return <article key={card.label} className="reveal surface soft-border rounded-2xl p-5"><div className="flex items-start justify-between"><p className="data-label">{card.label}</p><Icon className={`h-4 w-4 ${card.tone}`} /></div><p className="metric-value mt-5">{dashboard.isLoading ? "—" : card.value}</p><p className="mt-2 text-xs text-muted-foreground">{card.hint}</p></article>; })}</section>
+  <section className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]"><article className="surface soft-border reveal rounded-2xl"><div className="flex items-center justify-between border-b border-white/8 px-5 py-4"><div><p className="data-label">Event stream</p><h2 className="mt-1 text-sm font-semibold">Recent detected changes</h2></div><button onClick={() => setLocation("/changes")} className="text-xs text-primary hover:text-primary/80">View all</button></div><div className="divide-y divide-white/7">{data?.recentChanges?.length ? data.recentChanges.map(({ event, source }) => <button key={event.id} onClick={() => setLocation(`/changes?id=${event.id}`)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-white/[0.035]"><span className={`h-2 w-2 rounded-full ${event.classification === "material" ? "bg-amber-300" : event.classification === "cosmetic" ? "bg-sky-300" : "bg-slate-500"}`} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{source.name}</p><p className="mt-1 truncate font-mono text-[0.66rem] text-slate-500">{event.changedFields.slice(0, 2).join(" · ") || "No changed fields recorded"}</p></div><div className="hidden text-right sm:block"><StatusPill value={event.status} /><p className="mt-1.5 text-[0.68rem] text-slate-500">{formatDate(event.detectedAt)}</p></div></button>) : <div className="px-5 py-12 text-center"><Database className="mx-auto h-6 w-6 text-slate-600" /><p className="mt-3 text-sm font-medium">No evidence events yet</p><p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-slate-500">Add an approved source and run an initial check. The platform will create a baseline without sending a change alert.</p></div>}</div></article>
+  <article className="surface soft-border reveal rounded-2xl p-5"><p className="data-label">Operational posture</p><h2 className="mt-1 text-sm font-semibold">What needs attention</h2><div className="mt-5 space-y-4"><div className="rounded-xl border border-white/8 bg-black/10 p-4"><div className="flex items-center gap-2 text-sm font-medium"><Activity className="h-4 w-4 text-primary" /> Scheduled monitoring</div><p className="mt-2 text-xs leading-5 text-slate-400">Sources remain paused until you activate them. Activation creates a durable schedule after the platform has been deployed.</p></div><div className="rounded-xl border border-white/8 bg-black/10 p-4"><div className="flex items-center gap-2 text-sm font-medium"><CircleAlert className="h-4 w-4 text-amber-200" /> Human-controlled escalation</div><p className="mt-2 text-xs leading-5 text-slate-400">A material candidate never triggers action automatically. A reviewer confirms it first; only then is the owner push notification sent.</p></div><div className="rounded-xl border border-white/8 bg-black/10 p-4"><div className="flex items-center gap-2 text-sm font-medium"><ShieldCheck className="h-4 w-4 text-sky-200" /> Evidence-first history</div><p className="mt-2 text-xs leading-5 text-slate-400">Raw, normalized, and structured-diff artifacts are stored separately from operational state to support review and auditability.</p></div></div></article></section></div>;
 }

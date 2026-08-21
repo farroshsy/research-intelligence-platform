@@ -1,0 +1,43 @@
+# Real-world setup and operating guide
+
+## 1. Publish before creating schedules
+
+The application uses durable platform-managed scheduled callbacks for source monitoring and reconciliation. These callbacks only reach the published application, not the development preview. Create a checkpoint, then use the **Publish** control in the project interface before activating a source or configuring the reconciliation job.
+
+## 2. Choose permitted sources
+
+Start with two public sources that you are entitled to monitor, such as a documented JSON API, public RSS feed, stable documentation page, or plain-text page. Do not add sources that require bypassing access controls, CAPTCHA challenges, private-network access, or credentials embedded in the URL.
+
+For every source, record its owner, URL, allowed access method, expected rate limit, monitoring purpose, and the conditions that make a change material. This keeps the monitoring contract defensible and reduces false alerts.
+
+## 3. Create the source contract
+
+Open **Sources** and create a source. The first source should normally remain paused. Use a six-field UTC cron expression; for example, `0 0 9 * * *` runs daily at 09:00 UTC. Configure parser rules to include meaningful stable content, ignore rules to remove known volatile text, and materiality rules for minimum change size, change ratio, and high-value keywords.
+
+Run the source manually once. The first successful run creates a baseline and preserves evidence without creating a change alert. Review the baseline artifacts before activating the schedule. The source contract also enforces a minimum request interval; set it no lower than the source owner's documented rate limit, with 60 seconds as the platform minimum.
+
+## 4. Activate monitoring and reconciliation
+
+After the source and baseline are valid, activate the source. The platform stores the source’s schedule task identifier and uses it to authenticate each callback. Then open **Operations** and configure the reconciliation job. Reconciliation marks abandoned runs as failed and retries a failed owner notification rather than silently losing it.
+
+## 5. Review and alert workflow
+
+Candidate material changes appear in **Change review** with a deterministic diff, before/after evidence, hashes, and review history. An optional advisory explanation can be generated using `gpt-5-mini`; it is structured, validated, explicitly non-authoritative, limited to material candidates, and capped at twelve manual requests per UTC day for the workspace owner.
+
+Only the **Confirm material & notify owner** decision changes a material candidate to confirmed and requests an immediate owner push notification. Cosmetic or no-change events cannot be confirmed as material. If delivery is temporarily unavailable, the database records the failed delivery and the reconciliation job retries it. A dashboard view alone is never required to receive this owner alert.
+
+## 6. Initial operating checklist
+
+| Check | Expected outcome |
+|---|---|
+| First manual check | A baseline event and evidence artifacts, with no alert |
+| Repeat unchanged check | A no-change observation and no duplicate notification |
+| Controlled material change | A pending-review material event with a structured diff |
+| Reviewer confirmation | An append-only review record and owner notification request |
+| Failed delivery test | Notification status is retained as failed and later retried by reconciliation |
+| Source failure test | A failed fetch run with no false no-change classification and a recovery record when retryable |
+| Rate-control test | A run inside the configured interval is recorded as skipped rather than fetching again |
+
+## 7. Operational limits
+
+The first release supports public HTTP/HTTPS JSON APIs, HTML pages, RSS content, and plain text. Source responses are limited to 2 MB, redirects are rejected, and returned content types are validated against the configured parser; add the final canonical URL instead. For high-volume crawling, JavaScript-rendered content, custom parsers, or sub-minute monitoring, evolve the worker architecture before increasing source count.

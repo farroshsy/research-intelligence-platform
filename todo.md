@@ -26,3 +26,13 @@
 - [x] Expand focused Vitest coverage for canonicalization, rate control, review confirmation, and advisory guardrails.
 - [x] Surface notification-linked recovery records in Operations and cover their audit visibility with a focused test.
 - [x] Add a database-backed router test that verifies a notification-linked recovery record is returned only to its owning user's Operations recovery queue.
+- [x] Add owner-scoped execution-audit search with source, run status, initiation type, and UTC date-range filters.
+- [x] Add an indexed report-query API that returns detected changes, evidence summaries, review decisions, and advisory explanations for export.
+- [x] Add a persistent dashboard dark/light mode toggle that respects system preference and maintains accessible contrast.
+- [x] Add safe CSV export of filtered detected-change and advisory-explanation records with UTF-8/BOM compatibility.
+- [x] Add polished browser-generated PDF report export for filtered detected changes, reviewer decisions, evidence hashes, and advisory explanations.
+- [x] Add report metadata, export timestamp, applied-filter summary, and deterministic sort order for audit-friendly sharing.
+- [x] Add focused tests and responsive verification for audit filters, theme persistence, and report data shaping.
+- [x] Add generated-at timestamp and applied-filter metadata to CSV reports, with unit coverage.
+- [x] Add focused test coverage for stored theme preference and system-preference fallback behavior.
+- [x] Verify the Reports and filtered Operations screens at a mobile viewport and record the findings.

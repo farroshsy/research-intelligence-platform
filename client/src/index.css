@@ -29,6 +29,29 @@
 }
 
 :root {
+  --background: oklch(0.975 0.006 170);
+  --foreground: oklch(0.23 0.02 252);
+  --card: oklch(0.99 0.004 170);
+  --card-foreground: oklch(0.23 0.02 252);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.23 0.02 252);
+  --primary: oklch(0.66 0.15 167);
+  --primary-foreground: oklch(0.98 0.005 170);
+  --secondary: oklch(0.93 0.01 170);
+  --secondary-foreground: oklch(0.26 0.02 252);
+  --muted: oklch(0.94 0.008 170);
+  --muted-foreground: oklch(0.47 0.025 252);
+  --accent: oklch(0.9 0.035 167);
+  --accent-foreground: oklch(0.24 0.02 252);
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --border: oklch(0.84 0.015 252 / 0.9);
+  --input: oklch(0.96 0.006 170);
+  --ring: oklch(0.66 0.15 167);
+  --radius: 0.85rem;
+}
+
+.dark {
   --background: oklch(0.165 0.018 252);
   --foreground: oklch(0.96 0.008 100);
   --card: oklch(0.205 0.018 252);
@@ -48,7 +71,6 @@
   --border: oklch(0.32 0.021 252 / 0.8);
   --input: oklch(0.27 0.019 252);
   --ring: oklch(0.8 0.15 167);
-  --radius: 0.85rem;
 }
 
 * { border-color: var(--border); }
@@ -61,9 +83,17 @@ button, input, select, textarea { font: inherit; }
   background-size: 36px 36px;
 }
 
-.surface { background: linear-gradient(135deg, oklch(0.225 0.019 252 / 0.92), oklch(0.195 0.016 252 / 0.92)); box-shadow: 0 20px 50px oklch(0.05 0.02 252 / 0.18); }
-.soft-border { border: 1px solid oklch(0.4 0.03 252 / 0.5); }
-.data-label { color: oklch(0.69 0.02 252); font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.11em; text-transform: uppercase; }
+.surface { background: linear-gradient(135deg, oklch(1 0.004 170 / 0.96), oklch(0.955 0.01 170 / 0.96)); box-shadow: 0 20px 50px oklch(0.35 0.02 252 / 0.11); }
+.soft-border { border: 1px solid oklch(0.82 0.02 252 / 0.85); }
+.data-label { color: oklch(0.45 0.03 252); font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.11em; text-transform: uppercase; }
+.dark .surface { background: linear-gradient(135deg, oklch(0.225 0.019 252 / 0.92), oklch(0.195 0.016 252 / 0.92)); box-shadow: 0 20px 50px oklch(0.05 0.02 252 / 0.18); }
+.dark .soft-border { border-color: oklch(0.4 0.03 252 / 0.5); }
+.dark .data-label { color: oklch(0.69 0.02 252); }
+html:not(.dark) .text-slate-300 { color: var(--foreground); }
+html:not(.dark) .text-slate-400,
+html:not(.dark) .text-slate-500,
+html:not(.dark) .text-slate-600 { color: var(--muted-foreground); }
+html:not(.dark) .text-amber-50 { color: oklch(0.35 0.075 85); }
 .metric-value { font-size: clamp(1.65rem, 2.3vw, 2.4rem); font-weight: 700; letter-spacing: -0.05em; }
 
 @media (prefers-reduced-motion: no-preference) {

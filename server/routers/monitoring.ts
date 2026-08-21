@@ -1,5 +1,5 @@
 import { parse as parseCookie } from "cookie";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   advisoryExplanations,
@@ -34,6 +34,22 @@ const sourceInput = z.object({
   ignoreRules: jsonObjectSchema.default({}),
   materialityPolicy: jsonObjectSchema.default({}),
 });
+const executionFiltersSchema = z.object({
+  query: z.string().trim().max(160).optional(),
+  sourceId: z.number().int().positive().optional(),
+  status: z.enum(["running", "succeeded", "failed", "skipped"]).optional(),
+  initiatedBy: z.enum(["scheduled", "manual", "reconciliation"]).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+}).optional();
+const reportFiltersSchema = z.object({
+  sourceId: z.number().int().positive().optional(),
+  classification: z.enum(["baseline", "no_change", "cosmetic", "material"]).optional(),
+  status: z.enum(["pending_review", "confirmed", "not_material", "suppressed"]).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  includeSuppressed: z.boolean().optional(),
+}).optional();
 
 function sessionToken(headers: Record<string, string | string[] | undefined>) {
   const value = headers.cookie;
@@ -178,10 +194,17 @@ export const monitoringRouter = router({
       if (!db) return [];
       return db.select({ recovery: recoveryRecords, source: sources }).from(recoveryRecords).innerJoin(sources, eq(recoveryRecords.sourceId, sources.id)).where(eq(sources.ownerId, ctx.user.id)).orderBy(desc(recoveryRecords.createdAt)).limit(50);
     }),
-    executionList: protectedProcedure.query(async ({ ctx }) => {
+    executionList: protectedProcedure.input(executionFiltersSchema).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      return db.select({ run: fetchRuns, source: sources }).from(fetchRuns).innerJoin(sources, eq(fetchRuns.sourceId, sources.id)).where(eq(sources.ownerId, ctx.user.id)).orderBy(desc(fetchRuns.startedAt)).limit(80);
+      const conditions = [eq(sources.ownerId, ctx.user.id)];
+      if (input?.sourceId) conditions.push(eq(fetchRuns.sourceId, input.sourceId));
+      if (input?.status) conditions.push(eq(fetchRuns.status, input.status));
+      if (input?.initiatedBy) conditions.push(eq(fetchRuns.initiatedBy, input.initiatedBy));
+      if (input?.from) conditions.push(gte(fetchRuns.startedAt, input.from));
+      if (input?.to) conditions.push(lte(fetchRuns.startedAt, input.to));
+      if (input?.query) conditions.push(or(like(sources.name, `%${input.query}%`), like(sources.url, `%${input.query}%`))!);
+      return db.select({ run: fetchRuns, source: sources }).from(fetchRuns).innerJoin(sources, eq(fetchRuns.sourceId, sources.id)).where(and(...conditions)).orderBy(desc(fetchRuns.startedAt)).limit(120);
     }),
     executionDetail: protectedProcedure.input(z.object({ runId: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -209,6 +232,27 @@ export const monitoringRouter = router({
       if (existing) await db.update(systemJobs).set({ cron, scheduleCronTaskUid: taskUid, enabled: true }).where(eq(systemJobs.id, existing.id));
       else await db.insert(systemJobs).values({ ownerId: ctx.user.id, kind: "reconciliation", cron, scheduleCronTaskUid: taskUid, enabled: true });
       return { taskUid };
+    }),
+  }),
+  reports: router({
+    changeList: protectedProcedure.input(reportFiltersSchema).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { generatedAt: new Date(), filters: input ?? {}, records: [] };
+      const conditions = [eq(sources.ownerId, ctx.user.id)];
+      if (input?.sourceId) conditions.push(eq(changeEvents.sourceId, input.sourceId));
+      if (input?.classification) conditions.push(eq(changeEvents.classification, input.classification));
+      if (input?.status) conditions.push(eq(changeEvents.status, input.status));
+      if (input?.from) conditions.push(gte(changeEvents.detectedAt, input.from));
+      if (input?.to) conditions.push(lte(changeEvents.detectedAt, input.to));
+      if (!input?.includeSuppressed && !input?.status) conditions.push(sql`${changeEvents.status} <> 'suppressed'`);
+      const events = await db.select({ event: changeEvents, source: sources }).from(changeEvents).innerJoin(sources, eq(changeEvents.sourceId, sources.id)).where(and(...conditions)).orderBy(desc(changeEvents.detectedAt)).limit(250);
+      const records = await Promise.all(events.map(async ({ event, source }) => {
+        const [review] = await db.select().from(reviews).where(eq(reviews.changeEventId, event.id)).orderBy(desc(reviews.reviewedAt)).limit(1);
+        const [explanation] = await db.select().from(advisoryExplanations).where(eq(advisoryExplanations.changeEventId, event.id)).orderBy(desc(advisoryExplanations.createdAt)).limit(1);
+        const preservedEvidence = await db.select({ role: evidence.role, sha256: artifacts.sha256, previewText: artifacts.previewText }).from(evidence).innerJoin(artifacts, eq(evidence.artifactId, artifacts.id)).where(eq(evidence.changeEventId, event.id));
+        return { event, source, review: review ?? null, explanation: explanation ?? null, evidence: preservedEvidence };
+      }));
+      return { generatedAt: new Date(), filters: input ?? {}, records };
     }),
   }),
 });

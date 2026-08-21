@@ -41,3 +41,11 @@ Only the **Confirm material & notify owner** decision changes a material candida
 ## 7. Operational limits
 
 The first release supports public HTTP/HTTPS JSON APIs, HTML pages, RSS content, and plain text. Source responses are limited to 2 MB, redirects are rejected, and returned content types are validated against the configured parser; add the final canonical URL instead. For high-volume crawling, JavaScript-rendered content, custom parsers, or sub-minute monitoring, evolve the worker architecture before increasing source count.
+
+## 8. Audit search, display mode, and sharing reports
+
+Open **Operations** to search the execution audit by source name or URL, source, run status, initiating workflow, and inclusive UTC date range. Clearing the controls restores the newest 120 owner-scoped runs. This is intended for tracing a known fetch failure, confirming a scheduled run, or locating a historical manual baseline without exposing another user's operational data.
+
+The header sun/moon control switches between accessible light and dark display modes. The selected mode is stored locally in the browser; when no preference has been stored, the workspace follows the device color-scheme preference. This setting affects presentation only and never changes monitoring, review, alerting, or evidence behavior.
+
+Open **Reports** to build a filtered preview of detected changes. CSV reports use UTF-8 with a byte-order mark for spreadsheet compatibility and neutralize formula-like cell values before export. PDF reports include report metadata, applied filters, event timestamps, deterministic scores, reviewer decisions, preserved evidence hashes, and schema-valid advisory summaries. Advisory content remains explicitly contextual and must not be treated as an automated decision.

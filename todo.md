@@ -16,7 +16,7 @@
 - [x] Build a polished dashboard with source health, success and failure rates, pending reviews, recent changes, execution history, and meaningful empty/loading/error states.
 - [x] Build a change-review experience with before/after evidence, structured diff, hashes, advisory explanation, and explicit human decisions.
 - [x] Build execution and evidence detail views with auditable timelines and recovery information.
-- [ ] Add integration-level Vitest coverage for database-backed idempotency, owner-notification delivery retries, and advisory invocation persistence.
+- [x] Add database-backed integration coverage for monitoring idempotency and advisory explanation persistence; owner-scoped notification recovery coverage is complete.
 - [x] Verify the dashboard on desktop and mobile, resolve runtime or console errors, and document real-world setup, source eligibility, deployment, and operations.
 - [x] Add explicit per-source request-rate controls, content-type validation, and safe retry/backoff behavior beyond schedule frequency.
 - [x] Record suppressed no-change events with structured evidence while retaining idempotent observation processing.

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { entities, entityRelations, evidenceClaims, researchMissions, users } from "../../drizzle/schema";
+import { changeEvents, contentVersions, entities, entityRelations, eventClusters, evidenceClaims, fetchRuns, missionSources, observations, researchMissions, sources, users } from "../../drizzle/schema";
 import { getDb } from "../db";
 import type { TrpcContext } from "../_core/context";
 import { missionsRouter } from "./missions";
@@ -20,6 +20,8 @@ function insertId(result: unknown): number {
 describeWithDatabase("missions router integration", () => {
   let db: NonNullable<Awaited<ReturnType<typeof getDb>>>;
   const ids = {
+    cluster: [] as number[],
+    source: [] as number[],
     relation: [] as number[],
     entity: [] as number[],
     claim: [] as number[],
@@ -35,9 +37,11 @@ describeWithDatabase("missions router integration", () => {
 
   afterEach(async () => {
     vi.resetAllMocks();
+    for (const id of ids.cluster.splice(0)) await db.delete(eventClusters).where(eq(eventClusters.id, id));
     for (const id of ids.relation.splice(0)) await db.delete(entityRelations).where(eq(entityRelations.id, id));
     for (const id of ids.entity.splice(0)) await db.delete(entities).where(eq(entities.id, id));
     for (const id of ids.claim.splice(0)) await db.delete(evidenceClaims).where(eq(evidenceClaims.id, id));
+    for (const id of ids.source.splice(0)) await db.delete(sources).where(eq(sources.id, id));
     for (const id of ids.mission.splice(0)) await db.delete(researchMissions).where(eq(researchMissions.id, id));
     for (const id of ids.user.splice(0)) await db.delete(users).where(eq(users.id, id));
   });
@@ -147,5 +151,49 @@ describeWithDatabase("missions router integration", () => {
     await owner.relationships.remove({ id: relation.id });
     const removed = await db.select().from(entityRelations).where(eq(entityRelations.id, relation.id)).limit(1);
     expect(removed).toHaveLength(0);
+  });
+
+  it("keeps reviewer cluster creation and merge or split operations within one owned mission boundary", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `cluster-owner-${suffix}`, name: "Cluster owner", role: "user" }));
+    ids.user.push(ownerId);
+    const firstMissionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "First cluster mission", template: "general", decisionQuestion: "Review first changes.", materialityPolicy: {} }));
+    const secondMissionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Second cluster mission", template: "general", decisionQuestion: "Review second changes.", materialityPolicy: {} }));
+    ids.mission.push(firstMissionId, secondMissionId);
+    const firstClusterId = insertId(await db.insert(eventClusters).values({ ownerId, missionId: firstMissionId, title: "First reviewer cluster", noveltyScore: 0.4 }));
+    const secondClusterId = insertId(await db.insert(eventClusters).values({ ownerId, missionId: secondMissionId, title: "Second reviewer cluster", noveltyScore: 0.5 }));
+    ids.cluster.push(firstClusterId, secondClusterId);
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `cluster-owner-${suffix}`, "Cluster owner"));
+
+    await expect(owner.clusters.create({ missionId: firstMissionId, title: "Invalid event boundary", noveltyScore: 0.5, changeEventIds: [999999999] })).rejects.toThrow("mission's owned sources");
+    await expect(owner.clusterReview.merge({ sourceClusterId: firstClusterId, targetClusterId: secondClusterId })).rejects.toThrow("same mission");
+    await expect(owner.clusterReview.split({ clusterId: firstClusterId, title: "Invalid split", changeEventIds: [999999999] })).rejects.toThrow("current cluster members");
+  });
+
+  it("creates clusters only from material events of an owned source linked to the mission", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `material-cluster-owner-${suffix}`, name: "Material cluster owner", role: "user" }));
+    ids.user.push(ownerId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Material event mission", template: "general", decisionQuestion: "Group material changes.", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const sourceId = insertId(await db.insert(sources).values({ ownerId, name: `Mission source ${suffix}`, sourceType: "plain_text", url: "https://example.com/mission-source", checkCron: "0 9 * * *", parserConfig: {}, ignoreRules: {}, materialityPolicy: {} }));
+    ids.source.push(sourceId);
+    await db.insert(missionSources).values({ missionId, sourceId });
+
+    const cosmeticRunId = insertId(await db.insert(fetchRuns).values({ sourceId, idempotencyKey: `cosmetic-run-${suffix}`, initiatedBy: "test" }));
+    const cosmeticObservationId = insertId(await db.insert(observations).values({ sourceId, fetchRunId: cosmeticRunId, canonicalHash: `cosmetic-hash-${suffix}`, classification: "cosmetic" }));
+    const cosmeticVersionId = insertId(await db.insert(contentVersions).values({ sourceId, observationId: cosmeticObservationId, versionNumber: 1, contentHash: `cosmetic-version-${suffix}`, canonicalText: "Cosmetic observed content" }));
+    const cosmeticEventId = insertId(await db.insert(changeEvents).values({ sourceId, observationId: cosmeticObservationId, currentVersionId: cosmeticVersionId, classification: "cosmetic", changedFields: ["spacing"], structuredDiff: {}, deterministicScore: 0.2, suggestedSignificance: "low" }));
+
+    const materialRunId = insertId(await db.insert(fetchRuns).values({ sourceId, idempotencyKey: `material-run-${suffix}`, initiatedBy: "test" }));
+    const materialObservationId = insertId(await db.insert(observations).values({ sourceId, fetchRunId: materialRunId, canonicalHash: `material-hash-${suffix}`, classification: "material" }));
+    const materialVersionId = insertId(await db.insert(contentVersions).values({ sourceId, observationId: materialObservationId, versionNumber: 2, contentHash: `material-version-${suffix}`, canonicalText: "Material observed content" }));
+    const materialEventId = insertId(await db.insert(changeEvents).values({ sourceId, observationId: materialObservationId, currentVersionId: materialVersionId, classification: "material", changedFields: ["deadline"], structuredDiff: {}, deterministicScore: 0.9, suggestedSignificance: "high" }));
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `material-cluster-owner-${suffix}`, "Material cluster owner"));
+
+    await expect(owner.clusters.create({ missionId, title: "Cosmetic event cluster", noveltyScore: 0.2, changeEventIds: [cosmeticEventId] })).rejects.toThrow("material changes");
+    const created = await owner.clusters.create({ missionId, title: "Material event cluster", noveltyScore: 0.9, changeEventIds: [materialEventId] });
+    ids.cluster.push(created.id);
+    expect(created.id).toBeGreaterThan(0);
   });
 });

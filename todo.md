@@ -66,7 +66,7 @@
 - [x] Align the current monitoring, delivery, governance, and review backlog with the approved product direction before building additional features.
 - [x] Add research-mission schema and protected lifecycle APIs for decision questions, owners, horizons, materiality policy, and mission status.
 - [x] Add reusable career-intelligence and procurement/policy mission templates without seeding fabricated user data.
-- [ ] Add evidence claims, source authority, freshness, corroboration, contradiction, and human assessment records with explainable confidence composition.
+- [x] Add evidence claims, source authority, freshness, corroboration, contradiction, and human assessment records with explainable confidence composition.
 - [ ] Add governed entities and evidence-backed relationships for organizations, people, programmes, skills, locations, regulations, and opportunities.
 - [ ] Add deterministic and advisory-assisted event clustering with reviewer merge/split controls and novelty indicators.
 - [ ] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.

@@ -86,6 +86,26 @@ describeWithDatabase("missions router integration", () => {
     expect(call.messages[1]?.content).not.toContain("music album");
   });
 
+  it("allows only the claim owner to record a human evidence assessment", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `assessment-owner-${suffix}`, name: "Assessment owner", role: "user" }));
+    const otherId = insertId(await db.insert(users).values({ openId: `assessment-other-${suffix}`, name: "Assessment other", role: "user" }));
+    ids.user.push(ownerId, otherId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Evidence assessment", template: "general", decisionQuestion: "Assess the evidence.", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const claimId = insertId(await db.insert(evidenceClaims).values({ ownerId, missionId, claimText: "A preserved claim requires review.", stance: "support", authorityScore: 0.4, freshnessScore: 0.4, corroborationScore: 0, humanAssessment: "unreviewed" }));
+    ids.claim.push(claimId);
+
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `assessment-owner-${suffix}`, "Assessment owner"));
+    await owner.claimReview.assess({ id: claimId, authorityScore: 0.9, freshnessScore: 0.8, corroborationScore: 0.7, humanAssessment: "trusted" });
+    const updated = (await db.select().from(evidenceClaims).where(eq(evidenceClaims.id, claimId)).limit(1))[0];
+    expect(updated?.humanAssessment).toBe("trusted");
+    expect(updated?.corroborationScore).toBe(0.7);
+
+    const other = missionsRouter.createCaller(ctxFor(otherId, `assessment-other-${suffix}`, "Assessment other"));
+    await expect(other.claimReview.assess({ id: claimId, humanAssessment: "rejected" })).rejects.toThrow("Evidence claim not found");
+  });
+
   it("prevents relationships between entities that do not both belong to the caller", async () => {
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
     const ownerId = insertId(await db.insert(users).values({ openId: `relationship-owner-${suffix}`, name: "Relationship owner", role: "user" }));

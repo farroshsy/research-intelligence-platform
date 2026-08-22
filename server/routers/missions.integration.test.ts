@@ -65,6 +65,27 @@ describeWithDatabase("missions router integration", () => {
     await expect(caller.investigate({ missionId, question: "What does the evidence show?" })).rejects.toThrow("outside this mission boundary");
   });
 
+  it("selects question-relevant preserved claims before advisory investigation", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `retrieval-owner-${suffix}`, name: "Retrieval owner", role: "user" }));
+    ids.user.push(ownerId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Career deadline", template: "career", decisionQuestion: "What is the application deadline?", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const relevantClaimId = insertId(await db.insert(evidenceClaims).values({ ownerId, missionId, claimText: "The AWS application deadline is 30 September.", stance: "support", authorityScore: 0.9, freshnessScore: 0.8, corroborationScore: 0.7, humanAssessment: "trusted" }));
+    const irrelevantClaimId = insertId(await db.insert(evidenceClaims).values({ ownerId, missionId, claimText: "A music album received a five-star review.", stance: "context", authorityScore: 0.5, freshnessScore: 0.5, corroborationScore: 0, humanAssessment: "trusted" }));
+    ids.claim.push(relevantClaimId, irrelevantClaimId);
+    mockInvokeLLM.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ answer: "The listed deadline is 30 September.", citedClaimIds: [relevantClaimId], uncertainty: [], unsupportedGaps: [] }) } }] });
+
+    const caller = missionsRouter.createCaller(ctxFor(ownerId, `retrieval-owner-${suffix}`, "Retrieval owner"));
+    const result = await caller.investigate({ missionId, question: "What is the AWS application deadline?" });
+    const call = mockInvokeLLM.mock.calls[0]?.[0] as { messages: Array<{ content: string }> };
+
+    expect(result.citedClaimIds).toEqual([relevantClaimId]);
+    expect(result.retrievedEvidenceCount).toBe(1);
+    expect(call.messages[1]?.content).toContain("AWS application deadline");
+    expect(call.messages[1]?.content).not.toContain("music album");
+  });
+
   it("prevents relationships between entities that do not both belong to the caller", async () => {
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
     const ownerId = insertId(await db.insert(users).values({ openId: `relationship-owner-${suffix}`, name: "Relationship owner", role: "user" }));

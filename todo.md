@@ -71,7 +71,7 @@
 - [x] Add deterministic reviewer-controlled event clustering with candidate explanations, merge/split controls, novelty indicators, and material-event boundary checks; keep semantic advisory clustering out of scope unless it can remain evidence-bounded and non-writing.
 - [x] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
 - [x] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
-- [ ] Rank and select question-relevant mission evidence, including linked preserved change evidence where available, before advisory investigation.
+- [x] Rank and select question-relevant mission evidence, including linked preserved change evidence where available, before advisory investigation.
 - [x] Surface unsupported evidence gaps in Mission Control investigation results and add end-to-end retrieval/citation validation coverage.
 - [ ] Add a unified mission-control workspace with focused tests, documentation, and responsive verification for the complete workflow.
 - [ ] Implement career and procurement/policy mission presets with tailored materiality defaults, recommended brief structures, guided fields, and focused verification.

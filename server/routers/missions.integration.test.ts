@@ -201,6 +201,33 @@ describeWithDatabase("missions router integration", () => {
     expect(created.id).toBeGreaterThan(0);
   });
 
+  it("never passes another owner's linked change evidence into bounded investigation context", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `linked-owner-${suffix}`, name: "Linked evidence owner", role: "user" }));
+    const otherId = insertId(await db.insert(users).values({ openId: `linked-other-${suffix}`, name: "Other evidence owner", role: "user" }));
+    ids.user.push(ownerId, otherId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Linked evidence mission", template: "general", decisionQuestion: "What deadline changed?", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const otherSourceId = insertId(await db.insert(sources).values({ ownerId: otherId, name: `Other owner source ${suffix}`, sourceType: "plain_text", url: "https://example.com/other-owner", checkCron: "0 9 * * *", parserConfig: {}, ignoreRules: {}, materialityPolicy: {} }));
+    ids.source.push(otherSourceId);
+    const runId = insertId(await db.insert(fetchRuns).values({ sourceId: otherSourceId, idempotencyKey: `linked-other-run-${suffix}`, initiatedBy: "test" }));
+    const observationId = insertId(await db.insert(observations).values({ sourceId: otherSourceId, fetchRunId: runId, canonicalHash: `linked-other-hash-${suffix}`, classification: "material" }));
+    const versionId = insertId(await db.insert(contentVersions).values({ sourceId: otherSourceId, observationId, versionNumber: 1, contentHash: `linked-other-version-${suffix}`, canonicalText: "Other owner preserved content" }));
+    const otherEventId = insertId(await db.insert(changeEvents).values({ sourceId: otherSourceId, observationId, currentVersionId: versionId, classification: "material", changedFields: ["deadline"], structuredDiff: {}, deterministicScore: 0.9, suggestedSignificance: "high" }));
+    const claimId = insertId(await db.insert(evidenceClaims).values({ ownerId, missionId, changeEventId: otherEventId, claimText: "The deadline may have changed.", stance: "support", authorityScore: 0.8, freshnessScore: 0.8, corroborationScore: 0.6, humanAssessment: "trusted" }));
+    ids.claim.push(claimId);
+    mockInvokeLLM.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ answer: "The linked evidence is unavailable to this mission.", citedClaimIds: [claimId], citedChangeEventIds: [], uncertainty: ["No authorized linked change metadata was available."], unsupportedGaps: [] }) } }] });
+
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `linked-owner-${suffix}`, "Linked evidence owner"));
+    const result = await owner.investigate({ missionId, question: "What deadline changed?" });
+    const call = mockInvokeLLM.mock.calls[0]?.[0] as { messages: Array<{ content: string }> };
+
+    expect(result.linkedChangeEvidenceCount).toBe(0);
+    expect(result.citedChangeEventIds).toEqual([]);
+    expect(call.messages[1]?.content).not.toContain(`Other owner source ${suffix}`);
+    expect(call.messages[1]?.content).not.toContain(String(otherEventId));
+  });
+
   it("keeps decision-brief edits and accountable action outcomes under the mission owner's control", async () => {
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
     const ownerId = insertId(await db.insert(users).values({ openId: `brief-owner-${suffix}`, name: "Brief owner", role: "user" }));

@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
-import { getSourceByScheduleTaskUid, getSystemJobByScheduleTaskUid } from "../db";
+import { getReportDeliveryByScheduleTaskUid, getSourceByScheduleTaskUid, getSystemJobByScheduleTaskUid } from "../db";
 import { sdk } from "../_core/sdk";
 import { reconcileMonitoring, runSourceCheck } from "./service";
+import { deliverScheduledReport } from "./reportDelivery";
 
 function errorPayload(error: unknown, context: Record<string, unknown>) {
   return {
@@ -36,6 +37,21 @@ export async function scheduledReconciliationHandler(req: Request, res: Response
     return res.json({ ok: true, ...(await reconcileMonitoring()) });
   } catch (error) {
     console.error("[Scheduled reconciliation]", error);
+    return res.status(500).json(errorPayload(error, { url: req.originalUrl }));
+  }
+}
+
+export async function scheduledReportDeliveryHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+    const delivery = await getReportDeliveryByScheduleTaskUid(user.taskUid);
+    if (!delivery) return res.json({ ok: true, skipped: "orphan" });
+    const result = await deliverScheduledReport(delivery);
+    if (!result.ok && result.retryable) return res.status(503).json(result);
+    return res.status(result.ok ? 200 : 422).json(result);
+  } catch (error) {
+    console.error("[Scheduled report delivery]", error);
     return res.status(500).json(errorPayload(error, { url: req.originalUrl }));
   }
 }

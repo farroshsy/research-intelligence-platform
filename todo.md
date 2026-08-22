@@ -36,3 +36,17 @@
 - [x] Add generated-at timestamp and applied-filter metadata to CSV reports, with unit coverage.
 - [x] Add focused test coverage for stored theme preference and system-preference fallback behavior.
 - [x] Verify the Reports and filtered Operations screens at a mobile viewport and record the findings.
+- [x] Add owner-scoped source trend aggregation for material/cosmetic changes, successful fetches, failed fetches, and failure rate over selectable time ranges.
+- [x] Add dashboard source-level change-volume and failure-rate charts with accessible summaries and useful empty states.
+- [x] Add report-template schema, protected CRUD APIs, and a Reports interface for naming, saving, applying, and deleting reusable filters.
+- [x] Add scheduled report-delivery schema, protected configuration APIs, delivery audit records, and durable schedule synchronization.
+- [x] Add secure Slack webhook and email-provider configuration with secrets kept outside report templates and user-facing records.
+- [x] Add scheduled report compilation and Slack/email delivery with failure capture, retry records, and no automated action beyond distribution.
+- [x] Add focused tests, documentation, and responsive verification for trends, templates, and scheduled delivery.
+- [x] Support Slack alongside one selected primary email provider per scheduled report, with disabled-by-default Resend, Gmail, and Outlook fallback configuration to prevent duplicate sends.
+- [x] Keep scheduled report delivery paused until a selected email provider and any selected Slack channel show secure credential readiness.
+- [x] Add a concise provider-activation checklist for Slack incoming webhooks, Resend, Gmail, and Outlook, including safe credential entry and schedule activation order.
+- [ ] Enter live delivery credentials, create one paused test schedule, and confirm a real Slack/email delivery before enabling a team schedule.
+- [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.
+- [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
+- [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.

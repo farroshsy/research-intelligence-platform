@@ -7,7 +7,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { scheduledReconciliationHandler, scheduledSourceCheckHandler } from "../monitoring/scheduled";
+import { scheduledReconciliationHandler, scheduledReportDeliveryHandler, scheduledSourceCheckHandler } from "../monitoring/scheduled";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -31,6 +31,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   app.post("/api/scheduled/source-check", scheduledSourceCheckHandler);
   app.post("/api/scheduled/reconcile", scheduledReconciliationHandler);
+  app.post("/api/scheduled/report-delivery", scheduledReportDeliveryHandler);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   if (process.env.NODE_ENV === "development") await setupVite(app, server);
   else serveStatic(app);

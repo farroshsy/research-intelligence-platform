@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, Source, systemJobs, users, sources } from "../drizzle/schema";
+import { InsertUser, Source, reportDeliveries, systemJobs, users, sources } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -50,4 +50,10 @@ export async function getSystemJobByScheduleTaskUid(taskUid: string) {
   const db = await getDb();
   if (!db) return undefined;
   return (await db.select().from(systemJobs).where(and(eq(systemJobs.scheduleCronTaskUid, taskUid), eq(systemJobs.kind, "reconciliation"))).limit(1))[0];
+}
+
+export async function getReportDeliveryByScheduleTaskUid(taskUid: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select().from(reportDeliveries).where(eq(reportDeliveries.scheduleCronTaskUid, taskUid)).limit(1))[0];
 }

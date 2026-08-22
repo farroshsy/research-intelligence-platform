@@ -37,8 +37,9 @@ export const artifactTypes = ["raw", "normalized", "diff"] as const;
 export const reviewDecisions = ["confirm_material", "not_material", "incorrect", "needs_follow_up"] as const;
 export const explanationStatuses = ["not_requested", "pending", "ready", "failed"] as const;
 export const workflowStatuses = ["running", "succeeded", "partial", "failed"] as const;
-export const recoveryKinds = ["fetch_retry", "notification_retry", "stuck_run"] as const;
+export const recoveryKinds = ["fetch_retry", "notification_retry", "stuck_run", "report_retry"] as const;
 export const recoveryStatuses = ["pending", "succeeded", "abandoned"] as const;
+export const deliveryStatuses = ["pending", "running", "succeeded", "partial", "failed"] as const;
 
 export const sources = mysqlTable(
   "sources",
@@ -247,6 +248,7 @@ export const recoveryRecords = mysqlTable(
     sourceId: int("sourceId").references(() => sources.id, { onDelete: "set null" }),
     fetchRunId: int("fetchRunId").references(() => fetchRuns.id, { onDelete: "set null" }),
     notificationId: int("notificationId").references(() => notifications.id, { onDelete: "set null" }),
+    reportDeliveryId: int("reportDeliveryId").references(() => reportDeliveries.id, { onDelete: "set null" }),
     kind: mysqlEnum("kind", recoveryKinds).notNull(),
     status: mysqlEnum("status", recoveryStatuses).default("pending").notNull(),
     retryCount: int("retryCount").default(0).notNull(),
@@ -259,6 +261,7 @@ export const recoveryRecords = mysqlTable(
   table => [
     index("recovery_records_status_next_idx").on(table.status, table.nextAttemptAt),
     index("recovery_records_source_created_idx").on(table.sourceId, table.createdAt),
+    index("recovery_records_report_delivery_created_idx").on(table.reportDeliveryId, table.createdAt),
   ]
 );
 
@@ -297,6 +300,62 @@ export const systemJobs = mysqlTable(
     uniqueIndex("system_jobs_owner_kind_idx").on(table.ownerId, table.kind),
     uniqueIndex("system_jobs_schedule_task_uid_idx").on(table.scheduleCronTaskUid),
   ]
+);
+
+export const reportTemplates = mysqlTable(
+  "reportTemplates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 140 }).notNull(),
+    description: text("description"),
+    filters: json("filters").$type<JsonObject>().notNull(),
+    includeSuppressed: boolean("includeSuppressed").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [uniqueIndex("report_templates_owner_name_idx").on(table.ownerId, table.name)]
+);
+
+export const reportDeliveries = mysqlTable(
+  "reportDeliveries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    templateId: int("templateId").references(() => reportTemplates.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 140 }).notNull(),
+    cron: varchar("cron", { length: 100 }).notNull(),
+    scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+    enabled: boolean("enabled").default(false).notNull(),
+    recipients: json("recipients").$type<string[]>().notNull(),
+    primaryEmailProvider: mysqlEnum("primaryEmailProvider", ["resend", "gmail", "outlook"]).notNull(),
+    fallbackProviders: json("fallbackProviders").$type<string[]>().notNull(),
+    slackEnabled: boolean("slackEnabled").default(true).notNull(),
+    filters: json("filters").$type<JsonObject>().notNull(),
+    lastAttemptAt: timestamp("lastAttemptAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("report_deliveries_owner_enabled_idx").on(table.ownerId, table.enabled),
+    uniqueIndex("report_deliveries_schedule_task_uid_idx").on(table.scheduleCronTaskUid),
+  ]
+);
+
+export const reportDeliveryAttempts = mysqlTable(
+  "reportDeliveryAttempts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    deliveryId: int("deliveryId").notNull().references(() => reportDeliveries.id, { onDelete: "cascade" }),
+    status: mysqlEnum("status", deliveryStatuses).default("pending").notNull(),
+    providersAttempted: json("providersAttempted").$type<string[]>().notNull(),
+    deliveredProviders: json("deliveredProviders").$type<string[]>().notNull(),
+    reportSummary: json("reportSummary").$type<JsonObject>().notNull(),
+    errorSummary: text("errorSummary"),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  table => [index("report_delivery_attempts_delivery_started_idx").on(table.deliveryId, table.startedAt)]
 );
 
 export type User = typeof users.$inferSelect;

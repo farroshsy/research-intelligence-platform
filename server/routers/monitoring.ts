@@ -10,6 +10,9 @@ import {
   fetchRuns,
   notifications,
   observations,
+  reportDeliveries,
+  reportDeliveryAttempts,
+  reportTemplates,
   recoveryRecords,
   reviews,
   sources,
@@ -20,6 +23,7 @@ import { getDb } from "../db";
 import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
 import { protectedProcedure, router } from "../_core/trpc";
 import { confirmMaterialChange, createAdvisoryExplanation, resolveReviewStatus, runSourceCheck, validateExternalSourceUrl } from "../monitoring/service";
+import { deliveryReadiness } from "../monitoring/reportDelivery";
 
 const cronSchema = z.string().trim().min(9).max(100).refine(value => value.split(/\s+/).length === 6, "Use a six-field UTC cron expression: sec min hour day month weekday.");
 const jsonObjectSchema = z.record(z.string(), z.unknown());
@@ -50,6 +54,22 @@ const reportFiltersSchema = z.object({
   to: z.coerce.date().optional(),
   includeSuppressed: z.boolean().optional(),
 }).optional();
+const storedReportFiltersSchema = z.object({
+  sourceId: z.number().int().positive().optional(),
+  classification: z.enum(["baseline", "no_change", "cosmetic", "material"]).optional(),
+  status: z.enum(["pending_review", "confirmed", "not_material", "suppressed"]).optional(),
+  includeSuppressed: z.boolean().default(false),
+});
+const deliveryInput = z.object({
+  name: z.string().trim().min(2).max(140),
+  templateId: z.number().int().positive().nullable().optional(),
+  cron: cronSchema,
+  recipients: z.array(z.string().trim().email().max(320)).min(1).max(50),
+  primaryEmailProvider: z.enum(["resend", "gmail", "outlook"]),
+  fallbackProviders: z.array(z.enum(["resend", "gmail", "outlook"])).max(2).default([]),
+  slackEnabled: z.boolean().default(true),
+  filters: storedReportFiltersSchema,
+});
 
 function sessionToken(headers: Record<string, string | string[] | undefined>) {
   const value = headers.cookie;
@@ -83,6 +103,25 @@ async function activateSourceSchedule(sourceId: number, ownerId: number, token: 
     taskUid = created.taskUid;
   }
   await db.update(sources).set({ status: "active", scheduleCronTaskUid: taskUid }).where(eq(sources.id, source.id));
+  return taskUid;
+}
+
+async function requireOwnedDelivery(ownerId: number, deliveryId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const delivery = (await db.select().from(reportDeliveries).where(and(eq(reportDeliveries.id, deliveryId), eq(reportDeliveries.ownerId, ownerId))).limit(1))[0];
+  if (!delivery) throw new Error("Scheduled delivery not found.");
+  return delivery;
+}
+
+async function activateDeliverySchedule(deliveryId: number, ownerId: number, token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  const delivery = await requireOwnedDelivery(ownerId, deliveryId);
+  let taskUid = delivery.scheduleCronTaskUid;
+  if (taskUid) await updateHeartbeatJob(taskUid, { cron: delivery.cron, path: "/api/scheduled/report-delivery", enable: true, description: `Send report ${delivery.name}` }, token);
+  else taskUid = (await createHeartbeatJob({ name: `research-report-${delivery.id}`, cron: delivery.cron, path: "/api/scheduled/report-delivery", payload: {}, description: `Send report ${delivery.name}` }, token)).taskUid;
+  await db.update(reportDeliveries).set({ enabled: true, scheduleCronTaskUid: taskUid }).where(eq(reportDeliveries.id, delivery.id));
   return taskUid;
 }
 
@@ -150,6 +189,23 @@ export const monitoringRouter = router({
     const completed = executions.filter(item => item.run.status === "succeeded" || item.run.status === "failed");
     const successRate = completed.length ? Math.round((completed.filter(item => item.run.status === "succeeded").length / completed.length) * 100) : 0;
     return { sources: owned, metrics: { active, healthy, degraded, failed, pendingReviews, successRate }, recentChanges: changes, executions };
+  }),
+  trends: protectedProcedure.input(z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }).optional()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    const days = input?.days ?? 30;
+    if (!db) return { days, sources: [] };
+    const since = new Date(Date.now() - (days - 1) * 86_400_000);
+    const owned = await db.select().from(sources).where(eq(sources.ownerId, ctx.user.id)).orderBy(desc(sources.updatedAt));
+    if (!owned.length) return { days, sources: [] };
+    const [runs, events] = await Promise.all([
+      db.select({ run: fetchRuns, source: sources }).from(fetchRuns).innerJoin(sources, eq(fetchRuns.sourceId, sources.id)).where(and(eq(sources.ownerId, ctx.user.id), gte(fetchRuns.startedAt, since))).orderBy(fetchRuns.startedAt).limit(5000),
+      db.select({ event: changeEvents, source: sources }).from(changeEvents).innerJoin(sources, eq(changeEvents.sourceId, sources.id)).where(and(eq(sources.ownerId, ctx.user.id), gte(changeEvents.detectedAt, since))).orderBy(changeEvents.detectedAt).limit(5000),
+    ]);
+    const daysList = Array.from({ length: days }, (_, index) => { const value = new Date(since); value.setUTCDate(value.getUTCDate() + index); return value.toISOString().slice(0, 10); });
+    const grouped = new Map(owned.map(source => [source.id, { source, buckets: new Map(daysList.map(day => [day, { date: day, material: 0, cosmetic: 0, successful: 0, failed: 0 }])) }]));
+    for (const item of runs) { const bucket = grouped.get(item.source.id)?.buckets.get(new Date(item.run.startedAt).toISOString().slice(0, 10)); if (bucket) { if (item.run.status === "succeeded") bucket.successful++; if (item.run.status === "failed") bucket.failed++; } }
+    for (const item of events) { const bucket = grouped.get(item.source.id)?.buckets.get(new Date(item.event.detectedAt).toISOString().slice(0, 10)); if (bucket) { if (item.event.classification === "material") bucket.material++; if (item.event.classification === "cosmetic") bucket.cosmetic++; } }
+    return { days, sources: Array.from(grouped.values()).map(({ source, buckets }) => { const series = Array.from(buckets.values()); const totalRuns = series.reduce((total, bucket) => total + bucket.successful + bucket.failed, 0); const totalFailures = series.reduce((total, bucket) => total + bucket.failed, 0); return { source, series, totals: { material: series.reduce((total, bucket) => total + bucket.material, 0), cosmetic: series.reduce((total, bucket) => total + bucket.cosmetic, 0), totalRuns, totalFailures, failureRate: totalRuns ? Math.round((totalFailures / totalRuns) * 100) : 0 } }; }) };
   }),
   changes: router({
     list: protectedProcedure.input(z.object({ status: z.enum(["pending_review", "confirmed", "not_material", "suppressed"]).optional() }).optional()).query(async ({ ctx, input }) => {
@@ -253,6 +309,21 @@ export const monitoringRouter = router({
         return { event, source, review: review ?? null, explanation: explanation ?? null, evidence: preservedEvidence };
       }));
       return { generatedAt: new Date(), filters: input ?? {}, records };
+    }),
+    templates: router({
+      list: protectedProcedure.query(async ({ ctx }) => { const db = await getDb(); return db ? db.select().from(reportTemplates).where(eq(reportTemplates.ownerId, ctx.user.id)).orderBy(desc(reportTemplates.updatedAt)) : []; }),
+      create: protectedProcedure.input(z.object({ name: z.string().trim().min(2).max(140), description: z.string().trim().max(1000).optional(), filters: storedReportFiltersSchema })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); const result = await db.insert(reportTemplates).values({ ownerId: ctx.user.id, name: input.name, description: input.description ?? null, filters: input.filters, includeSuppressed: input.filters.includeSuppressed }); return { id: insertId(result) }; }),
+      update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: z.object({ name: z.string().trim().min(2).max(140).optional(), description: z.string().trim().max(1000).nullable().optional(), filters: storedReportFiltersSchema.optional() }) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); const template = (await db.select().from(reportTemplates).where(and(eq(reportTemplates.id, input.id), eq(reportTemplates.ownerId, ctx.user.id))).limit(1))[0]; if (!template) throw new Error("Report template not found."); await db.update(reportTemplates).set({ ...input.patch, includeSuppressed: input.patch.filters?.includeSuppressed ?? template.includeSuppressed }).where(eq(reportTemplates.id, template.id)); return { success: true }; }),
+      remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.delete(reportTemplates).where(and(eq(reportTemplates.id, input.id), eq(reportTemplates.ownerId, ctx.user.id))); return { success: true }; }),
+    }),
+    deliveryConfiguration: protectedProcedure.query(() => ({ slack: Boolean(process.env.SLACK_WEBHOOK_URL), resend: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL), gmail: Boolean(process.env.GMAIL_ACCESS_TOKEN), outlook: Boolean(process.env.OUTLOOK_ACCESS_TOKEN) })),
+    deliveries: router({
+      list: protectedProcedure.query(async ({ ctx }) => { const db = await getDb(); if (!db) return []; const deliveries = await db.select().from(reportDeliveries).where(eq(reportDeliveries.ownerId, ctx.user.id)).orderBy(desc(reportDeliveries.updatedAt)); return Promise.all(deliveries.map(async delivery => ({ delivery, attempts: await db.select().from(reportDeliveryAttempts).where(eq(reportDeliveryAttempts.deliveryId, delivery.id)).orderBy(desc(reportDeliveryAttempts.startedAt)).limit(3) }))); }),
+      create: protectedProcedure.input(deliveryInput).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); if (input.templateId) { const template = (await db.select().from(reportTemplates).where(and(eq(reportTemplates.id, input.templateId), eq(reportTemplates.ownerId, ctx.user.id))).limit(1))[0]; if (!template) throw new Error("Report template not found."); } const result = await db.insert(reportDeliveries).values({ ...input, ownerId: ctx.user.id, templateId: input.templateId ?? null, fallbackProviders: Array.from(new Set(input.fallbackProviders.filter(provider => provider !== input.primaryEmailProvider))), enabled: false }); return { id: insertId(result) }; }),
+      update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: deliveryInput.partial() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); if (delivery.enabled && input.patch.cron && delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { cron: input.patch.cron }, sessionToken(ctx.req.headers)); await db.update(reportDeliveries).set(input.patch).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
+      activate: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); const readiness = deliveryReadiness(delivery); if (!readiness.email || !readiness.slack) throw new Error("Connect the selected email provider and any selected Slack channel before activating this schedule."); return { taskUid: await activateDeliverySchedule(input.id, ctx.user.id, sessionToken(ctx.req.headers)) }; }),
+      pause: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { enable: false }, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.update(reportDeliveries).set({ enabled: false }).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
+      remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await deleteHeartbeatJob(delivery.scheduleCronTaskUid, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.delete(reportDeliveries).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
     }),
   }),
 });

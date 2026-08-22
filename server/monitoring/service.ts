@@ -10,6 +10,7 @@ import {
   notifications,
   observations,
   recoveryRecords,
+  reportDeliveries,
   sources,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -17,6 +18,7 @@ import { notifyOwner } from "../_core/notification";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { compareNormalizedContent, normalizeSourceContent, sha256 } from "./normalization";
+import { deliverScheduledReport } from "./reportDelivery";
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20_000;
@@ -105,7 +107,8 @@ async function addRecoveryRecord(input: {
   sourceId?: number | null;
   fetchRunId?: number | null;
   notificationId?: number | null;
-  kind: "fetch_retry" | "notification_retry" | "stuck_run";
+  reportDeliveryId?: number | null;
+  kind: "fetch_retry" | "notification_retry" | "stuck_run" | "report_retry";
   retryCount?: number;
   lastError: string;
   details: Record<string, unknown>;
@@ -117,6 +120,7 @@ async function addRecoveryRecord(input: {
     sourceId: input.sourceId ?? null,
     fetchRunId: input.fetchRunId ?? null,
     notificationId: input.notificationId ?? null,
+    reportDeliveryId: input.reportDeliveryId ?? null,
     kind: input.kind,
     status: "pending",
     retryCount,
@@ -600,5 +604,22 @@ export async function reconcileMonitoring() {
       await db.update(recoveryRecords).set({ retryCount: nextRetry, nextAttemptAt: new Date(Date.now() + retryDelayMinutes(nextRetry) * 60_000), lastError: result.error ?? record.lastError, status: nextRetry >= 3 ? "abandoned" : "pending", resolvedAt: nextRetry >= 3 ? new Date() : null }).where(eq(recoveryRecords.id, record.id));
     }
   }
-  return { staleRunsRecovered: staleRuns.length, notificationsRetried: retryableNotifications.length, fetchRetries };
+  let reportRetries = 0;
+  for (const record of dueRecovery.filter(item => item.kind === "report_retry" && item.reportDeliveryId && item.retryCount < 3)) {
+    const delivery = (await db.select().from(reportDeliveries).where(eq(reportDeliveries.id, record.reportDeliveryId!)).limit(1))[0];
+    if (!delivery || !delivery.enabled) {
+      await db.update(recoveryRecords).set({ status: "abandoned", resolvedAt: new Date(), lastError: "Scheduled delivery is unavailable or paused." }).where(eq(recoveryRecords.id, record.id));
+      continue;
+    }
+    const details = record.details as { deliveredProviders?: string[] };
+    const result = await deliverScheduledReport(delivery, { alreadyDelivered: Array.isArray(details.deliveredProviders) ? details.deliveredProviders : [], createRetry: false });
+    reportRetries += 1;
+    if (!result.pendingRetry) {
+      await db.update(recoveryRecords).set({ status: "succeeded", resolvedAt: new Date(), lastError: null, details: { ...details, deliveredProviders: result.delivered } }).where(eq(recoveryRecords.id, record.id));
+    } else {
+      const nextRetry = record.retryCount + 1;
+      await db.update(recoveryRecords).set({ retryCount: nextRetry, nextAttemptAt: new Date(Date.now() + retryDelayMinutes(nextRetry) * 60_000), lastError: result.errors.join("\n") || record.lastError, details: { ...details, deliveredProviders: result.delivered }, status: nextRetry >= 3 ? "abandoned" : "pending", resolvedAt: nextRetry >= 3 ? new Date() : null }).where(eq(recoveryRecords.id, record.id));
+    }
+  }
+  return { staleRunsRecovered: staleRuns.length, notificationsRetried: retryableNotifications.length, fetchRetries, reportRetries };
 }

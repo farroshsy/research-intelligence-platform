@@ -49,3 +49,24 @@ Open **Operations** to search the execution audit by source name or URL, source,
 The header sun/moon control switches between accessible light and dark display modes. The selected mode is stored locally in the browser; when no preference has been stored, the workspace follows the device color-scheme preference. This setting affects presentation only and never changes monitoring, review, alerting, or evidence behavior.
 
 Open **Reports** to build a filtered preview of detected changes. CSV reports use UTF-8 with a byte-order mark for spreadsheet compatibility and neutralize formula-like cell values before export. PDF reports include report metadata, applied filters, event timestamps, deterministic scores, reviewer decisions, preserved evidence hashes, and schema-valid advisory summaries. Advisory content remains explicitly contextual and must not be treated as an automated decision.
+
+## 9. Activate Slack and email delivery when you are ready
+
+Scheduled distribution is intentionally stored in a **paused** state until its selected provider is configured. A schedule is not created merely by saving a delivery configuration, so the absence of credentials cannot create a surprise outbound message.
+
+| Channel | One-time setup | Secret to add | Readiness requirement |
+|---|---|---|---|
+| Slack | Create a Slack app, enable Incoming Webhooks, and add a webhook to the approved channel. | `SLACK_WEBHOOK_URL` | Required only when the delivery has **Also send Slack summary** enabled. |
+| Resend | Create an API key and verify the sender domain/address in the Resend dashboard. | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Required when Resend is selected as the primary provider. |
+| Gmail | Authorize an account with Gmail send permission and obtain a current OAuth access token. | `GMAIL_ACCESS_TOKEN` | Required when Gmail is selected as the primary provider. Renew the access token before it expires. |
+| Outlook | Authorize Microsoft Graph `Mail.Send` and obtain a current OAuth access token. | `OUTLOOK_ACCESS_TOKEN` | Required when Outlook is selected as the primary provider. Renew the access token before it expires. |
+
+Add these values through the project’s secure secrets settings, never in a source URL, report template, or message. Then return to **Reports**, verify the provider readiness label, save a delivery with a six-field UTC cron expression, and select **Activate**. Each attempt is recorded with the providers attempted, providers that accepted delivery, report summary, and any failure context.
+
+> Slack webhooks are channel-specific URLs and must be kept secret. Slack documents that leaked webhook URLs may be revoked.[1]
+
+The platform sends through **one selected primary email provider** for each schedule and can optionally post the Slack summary. It does not intentionally duplicate emails through every provider. You can select Gmail, Outlook, or Resend as ordered fallbacks; a fallback is used only when the earlier configured email provider cannot accept the message. If you change providers, pause the schedule, update the selected provider or fallbacks, confirm readiness, and reactivate it.
+
+## References
+
+[1]: https://api.slack.com/messaging/webhooks "Slack: Sending messages using incoming webhooks"

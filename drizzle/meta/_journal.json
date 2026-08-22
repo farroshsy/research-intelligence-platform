@@ -43,6 +43,13 @@
       "when": 1787399904261,
       "tag": "0005_late_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787403942208,
+      "tag": "0006_jazzy_killmonger",
+      "breakpoints": true
     }
   ]
 }

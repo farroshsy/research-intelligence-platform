@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { monitoringRouter } from "./routers/monitoring";
 import { intelligenceRouter } from "./routers/intelligence";
+import { missionsRouter } from "./routers/missions";
 
 export const appRouter = router({
   system: systemRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   }),
   monitoring: monitoringRouter,
   intelligence: intelligenceRouter,
+  missions: missionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -61,6 +61,17 @@
 - [ ] Integrate annotations and selected-change comparison into Change review; dashboard entry points for governance and anomaly triage are complete.
 - [x] Add collection filtering to Sources and cover combined collection, tag, steward, and status filtering behavior.
 - [x] Add focused coverage for combined collection, tag, steward, and status source filtering; updated Sources-page verification is complete.
+- [x] Reframe the platform around concrete research decisions, intended users, urgency, and measurable operational outcomes.
+- [x] Define a focused advanced capability roadmap covering research briefs, relationship intelligence, evidence confidence, decision workflows, and retrieval-assisted analysis.
+- [x] Align the current monitoring, delivery, governance, and review backlog with the approved product direction before building additional features.
+- [x] Add research-mission schema and protected lifecycle APIs for decision questions, owners, horizons, materiality policy, and mission status.
+- [ ] Add reusable career-intelligence and procurement/policy mission templates without seeding fabricated user data.
+- [ ] Add evidence claims, source authority, freshness, corroboration, contradiction, and human assessment records with explainable confidence composition.
+- [ ] Add governed entities and evidence-backed relationships for organizations, people, programmes, skills, locations, regulations, and opportunities.
+- [ ] Add deterministic and advisory-assisted event clustering with reviewer merge/split controls and novelty indicators.
+- [ ] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
+- [ ] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
+- [ ] Add a unified mission-control workspace, focused tests, documentation, and responsive verification for the complete workflow.
 - [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.
 - [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
 - [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.

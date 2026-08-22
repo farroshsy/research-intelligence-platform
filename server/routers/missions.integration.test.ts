@@ -253,4 +253,18 @@ describeWithDatabase("missions router integration", () => {
     await expect(other.briefs.update({ id: briefId, ownerName: "Unauthorized" })).rejects.toThrow("Decision brief not found");
     await expect(other.actions.setStatus({ id: action.id, status: "cancelled" })).rejects.toThrow("Decision action not found");
   });
+
+  it("persists the tailored career materiality policy supplied for a human-reviewed mission", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `preset-owner-${suffix}`, name: "Preset owner", role: "user" }));
+    ids.user.push(ownerId);
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `preset-owner-${suffix}`, "Preset owner"));
+    const created = await owner.create({ name: "Career deadline review", template: "career", decisionQuestion: "Which verified deadline should inform my career decision?", materialityPolicy: { presetVersion: "career-v1", urgency: "deadline", materialSignals: ["application deadline", "eligibility"], recommendedBriefSections: ["role fit", "skills evidence"], reviewRequirement: "Human review before application.", guidedInputs: { targetRoleOrProgramme: "Technical role family", deadlineConcern: "Verify application deadline" } } });
+    ids.mission.push(created.id);
+    const mission = (await db.select().from(researchMissions).where(eq(researchMissions.id, created.id)).limit(1))[0];
+    const policy = mission?.materialityPolicy as { urgency?: string; materialSignals?: string[]; guidedInputs?: { targetRoleOrProgramme?: string } };
+    expect(policy.urgency).toBe("deadline");
+    expect(policy.materialSignals).toContain("application deadline");
+    expect(policy.guidedInputs?.targetRoleOrProgramme).toBe("Technical role family");
+  });
 });

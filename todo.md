@@ -65,13 +65,14 @@
 - [x] Define a focused advanced capability roadmap covering research briefs, relationship intelligence, evidence confidence, decision workflows, and retrieval-assisted analysis.
 - [x] Align the current monitoring, delivery, governance, and review backlog with the approved product direction before building additional features.
 - [x] Add research-mission schema and protected lifecycle APIs for decision questions, owners, horizons, materiality policy, and mission status.
-- [ ] Add reusable career-intelligence and procurement/policy mission templates without seeding fabricated user data.
+- [x] Add reusable career-intelligence and procurement/policy mission templates without seeding fabricated user data.
 - [ ] Add evidence claims, source authority, freshness, corroboration, contradiction, and human assessment records with explainable confidence composition.
 - [ ] Add governed entities and evidence-backed relationships for organizations, people, programmes, skills, locations, regulations, and opportunities.
 - [ ] Add deterministic and advisory-assisted event clustering with reviewer merge/split controls and novelty indicators.
 - [ ] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
 - [ ] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
-- [ ] Add a unified mission-control workspace, focused tests, documentation, and responsive verification for the complete workflow.
+- [ ] Add a unified mission-control workspace with focused tests, documentation, and responsive verification for the complete workflow.
+- [ ] Implement career and procurement/policy mission presets with tailored materiality defaults, recommended brief structures, guided fields, and focused verification.
 - [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.
 - [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
 - [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.

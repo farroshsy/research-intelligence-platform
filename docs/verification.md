@@ -25,3 +25,5 @@ The updated Reports workspace was also checked at a 390 px mobile viewport after
 ## Expanded intelligence verification
 
 The Intelligence workspace was reviewed on desktop and at a 390 px mobile viewport. Source governance, CSV-style paused batch onboarding, alert-rule setup, deterministic anomaly scanning, cross-source comparison, and append-only annotation controls all render in a clear responsive hierarchy. Mobile controls preserve readable labels and remain within a single-column flow without horizontal overflow. Empty states accurately explain that real approved sources and observation history are required before comparisons, matches, and anomaly findings can appear.
+
+The Sources registry was rechecked after adding its combined governance filters. Status, tag, collection, and steward controls render together in a single row at desktop width, and the empty state correctly distinguishes a filtered registry from an unconfigured workspace.

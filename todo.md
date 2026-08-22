@@ -70,9 +70,9 @@
 - [ ] Add governed entities and evidence-backed relationships for organizations, people, programmes, skills, locations, regulations, and opportunities.
 - [ ] Add deterministic and advisory-assisted event clustering with reviewer merge/split controls and novelty indicators.
 - [ ] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
-- [ ] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
+- [x] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
 - [ ] Rank and select question-relevant mission evidence, including linked preserved change evidence where available, before advisory investigation.
-- [ ] Surface unsupported evidence gaps in Mission Control investigation results and add end-to-end retrieval/citation validation coverage.
+- [x] Surface unsupported evidence gaps in Mission Control investigation results and add end-to-end retrieval/citation validation coverage.
 - [ ] Add a unified mission-control workspace with focused tests, documentation, and responsive verification for the complete workflow.
 - [ ] Implement career and procurement/policy mission presets with tailored materiality defaults, recommended brief structures, guided fields, and focused verification.
 - [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.

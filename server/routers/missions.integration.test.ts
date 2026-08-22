@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { changeEvents, contentVersions, entities, entityRelations, eventClusters, evidenceClaims, fetchRuns, missionSources, observations, researchMissions, sources, users } from "../../drizzle/schema";
+import { changeEvents, contentVersions, decisionActions, decisionBriefs, entities, entityRelations, eventClusters, evidenceClaims, fetchRuns, missionSources, observations, researchMissions, sources, users } from "../../drizzle/schema";
 import { getDb } from "../db";
 import type { TrpcContext } from "../_core/context";
 import { missionsRouter } from "./missions";
@@ -20,6 +20,8 @@ function insertId(result: unknown): number {
 describeWithDatabase("missions router integration", () => {
   let db: NonNullable<Awaited<ReturnType<typeof getDb>>>;
   const ids = {
+    action: [] as number[],
+    brief: [] as number[],
     cluster: [] as number[],
     source: [] as number[],
     relation: [] as number[],
@@ -37,6 +39,8 @@ describeWithDatabase("missions router integration", () => {
 
   afterEach(async () => {
     vi.resetAllMocks();
+    for (const id of ids.action.splice(0)) await db.delete(decisionActions).where(eq(decisionActions.id, id));
+    for (const id of ids.brief.splice(0)) await db.delete(decisionBriefs).where(eq(decisionBriefs.id, id));
     for (const id of ids.cluster.splice(0)) await db.delete(eventClusters).where(eq(eventClusters.id, id));
     for (const id of ids.relation.splice(0)) await db.delete(entityRelations).where(eq(entityRelations.id, id));
     for (const id of ids.entity.splice(0)) await db.delete(entities).where(eq(entities.id, id));
@@ -195,5 +199,31 @@ describeWithDatabase("missions router integration", () => {
     const created = await owner.clusters.create({ missionId, title: "Material event cluster", noveltyScore: 0.9, changeEventIds: [materialEventId] });
     ids.cluster.push(created.id);
     expect(created.id).toBeGreaterThan(0);
+  });
+
+  it("keeps decision-brief edits and accountable action outcomes under the mission owner's control", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `brief-owner-${suffix}`, name: "Brief owner", role: "user" }));
+    const otherId = insertId(await db.insert(users).values({ openId: `brief-other-${suffix}`, name: "Brief other", role: "user" }));
+    ids.user.push(ownerId, otherId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Decision workflow", template: "general", decisionQuestion: "What should we decide?", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const briefId = insertId(await db.insert(decisionBriefs).values({ missionId, title: "Initial decision brief", options: [] }));
+    ids.brief.push(briefId);
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `brief-owner-${suffix}`, "Brief owner"));
+    await owner.briefs.update({ id: briefId, executiveSignal: "A human decision is required.", impactAssessment: "The decision affects the research response.", options: ["Continue review", "Defer"], ownerName: "Brief owner" });
+    const updated = (await db.select().from(decisionBriefs).where(eq(decisionBriefs.id, briefId)).limit(1))[0];
+    expect(updated?.options).toEqual(["Continue review", "Defer"]);
+    expect(updated?.ownerName).toBe("Brief owner");
+
+    const action = await owner.actions.create({ briefId, title: "Review the brief", assignee: "Brief owner" });
+    ids.action.push(action.id);
+    await owner.actions.setStatus({ id: action.id, status: "completed", outcome: "Human review completed." });
+    const actionRow = (await db.select().from(decisionActions).where(eq(decisionActions.id, action.id)).limit(1))[0];
+    expect(actionRow?.outcome).toBe("Human review completed.");
+
+    const other = missionsRouter.createCaller(ctxFor(otherId, `brief-other-${suffix}`, "Brief other"));
+    await expect(other.briefs.update({ id: briefId, ownerName: "Unauthorized" })).rejects.toThrow("Decision brief not found");
+    await expect(other.actions.setStatus({ id: action.id, status: "cancelled" })).rejects.toThrow("Decision action not found");
   });
 });

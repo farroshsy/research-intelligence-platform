@@ -69,7 +69,7 @@
 - [x] Add evidence claims, source authority, freshness, corroboration, contradiction, and human assessment records with explainable confidence composition.
 - [x] Add governed entities and evidence-backed relationships for organizations, people, programmes, skills, locations, regulations, and opportunities.
 - [x] Add deterministic reviewer-controlled event clustering with candidate explanations, merge/split controls, novelty indicators, and material-event boundary checks; keep semantic advisory clustering out of scope unless it can remain evidence-bounded and non-writing.
-- [ ] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
+- [x] Add mission-level decision briefs, accountable action cards, options, deadlines, decision status, and outcome feedback.
 - [x] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
 - [ ] Rank and select question-relevant mission evidence, including linked preserved change evidence where available, before advisory investigation.
 - [x] Surface unsupported evidence gaps in Mission Control investigation results and add end-to-end retrieval/citation validation coverage.

@@ -117,6 +117,35 @@ describeWithDatabase("missions router integration", () => {
 
     const caller = missionsRouter.createCaller(ctxFor(ownerId, `relationship-owner-${suffix}`, "Relationship owner"));
 
-    await expect(caller.relationships.create({ fromEntityId: ownerEntityId, toEntityId: otherEntityId, relationType: "partners_with", confidence: 0.7 })).rejects.toThrow("Both entities must belong to you");
+    await expect(caller.relationships.create({ fromEntityId: ownerEntityId, toEntityId: otherEntityId, relationType: "partners_with", evidenceClaimId: 1, confidence: 0.7 })).rejects.toThrow("Both entities must belong to you");
+  });
+
+  it("requires preserved evidence and keeps relationship review owner-scoped", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const ownerId = insertId(await db.insert(users).values({ openId: `graph-owner-${suffix}`, name: "Graph owner", role: "user" }));
+    const otherId = insertId(await db.insert(users).values({ openId: `graph-other-${suffix}`, name: "Graph other", role: "user" }));
+    ids.user.push(ownerId, otherId);
+    const missionId = insertId(await db.insert(researchMissions).values({ ownerId, name: "Entity graph", template: "general", decisionQuestion: "Which entities relate?", materialityPolicy: {} }));
+    ids.mission.push(missionId);
+    const claimId = insertId(await db.insert(evidenceClaims).values({ ownerId, missionId, claimText: "The preserved source identifies an organization and programme relationship.", stance: "support", authorityScore: 0.8, freshnessScore: 0.8, corroborationScore: 0.6, humanAssessment: "trusted" }));
+    ids.claim.push(claimId);
+    const organizationId = insertId(await db.insert(entities).values({ ownerId, name: "Owner organization", entityType: "organization", aliases: [] }));
+    const programmeId = insertId(await db.insert(entities).values({ ownerId, name: "Owner programme", entityType: "programme", aliases: [] }));
+    ids.entity.push(organizationId, programmeId);
+    const owner = missionsRouter.createCaller(ctxFor(ownerId, `graph-owner-${suffix}`, "Graph owner"));
+
+    await expect(owner.relationships.create({ fromEntityId: organizationId, toEntityId: programmeId, relationType: "operates", confidence: 0.7 })).rejects.toThrow();
+    const relation = await owner.relationships.create({ fromEntityId: organizationId, toEntityId: programmeId, relationType: "operates", evidenceClaimId: claimId, confidence: 0.7 });
+    ids.relation.push(relation.id);
+    await owner.relationships.review({ id: relation.id, confidence: 0.9, humanAssessment: "trusted" });
+    const updated = (await db.select().from(entityRelations).where(eq(entityRelations.id, relation.id)).limit(1))[0];
+    expect(updated?.humanAssessment).toBe("trusted");
+    expect(updated?.confidence).toBe(0.9);
+
+    const other = missionsRouter.createCaller(ctxFor(otherId, `graph-other-${suffix}`, "Graph other"));
+    await expect(other.relationships.review({ id: relation.id, humanAssessment: "rejected" })).rejects.toThrow("Entity relationship not found");
+    await owner.relationships.remove({ id: relation.id });
+    const removed = await db.select().from(entityRelations).where(eq(entityRelations.id, relation.id)).limit(1);
+    expect(removed).toHaveLength(0);
   });
 });

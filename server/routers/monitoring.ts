@@ -30,6 +30,7 @@ const jsonObjectSchema = z.record(z.string(), z.unknown());
 const sourceInput = z.object({
   name: z.string().trim().min(2).max(200),
   description: z.string().trim().max(2000).optional().nullable(),
+  steward: z.string().trim().max(160).optional().nullable(),
   sourceType: z.enum(["json_api", "html_page", "rss", "plain_text"]),
   url: z.string().trim().url().max(2048),
   checkCron: cronSchema,

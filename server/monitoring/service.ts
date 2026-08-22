@@ -19,6 +19,7 @@ import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { compareNormalizedContent, normalizeSourceContent, sha256 } from "./normalization";
 import { deliverScheduledReport } from "./reportDelivery";
+import { evaluateMaterialAlertRules } from "../intelligence/alertMatching";
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20_000;
@@ -461,6 +462,7 @@ export async function runSourceCheck(
         { changeEventId, artifactId: normalizedArtifactId, role: "after_normalized", excerpt: normalized.canonicalText.slice(0, RESPONSE_PREVIEW_LENGTH) },
         { changeEventId, artifactId: diffArtifactId, role: "diff", excerpt: diffContent.slice(0, RESPONSE_PREVIEW_LENGTH) },
       ]);
+      if (comparison.classification === "material") await evaluateMaterialAlertRules({ ownerId: source.ownerId, sourceId: source.id, changeEventId, suggestedSignificance: comparison.suggestedSignificance, changedFields: comparison.changedFields, structuredDiff: comparison.structuredDiff });
     }
     await db.update(fetchRuns).set({ status: "succeeded", completedAt: new Date(), httpStatus: fetched.status, contentType: fetched.contentType, responseHash: normalized.hash, latencyMs: fetched.latencyMs }).where(eq(fetchRuns.id, started.fetchRun.id));
     await db.update(sources).set({ health: "healthy", lastCheckAt: new Date(), lastSuccessAt: new Date(), consecutiveFailureCount: 0 }).where(eq(sources.id, source.id));

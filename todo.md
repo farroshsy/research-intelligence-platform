@@ -47,6 +47,18 @@
 - [x] Keep scheduled report delivery paused until a selected email provider and any selected Slack channel show secure credential readiness.
 - [x] Add a concise provider-activation checklist for Slack incoming webhooks, Resend, Gmail, and Outlook, including safe credential entry and schedule activation order.
 - [ ] Enter live delivery credentials, create one paused test schedule, and confirm a real Slack/email delivery before enabling a team schedule.
+- [x] Add collections, source tags, and per-source ownership metadata with protected management APIs and source-list filtering.
+- [x] Add CSV batch source import with client-side preview, row-level validation, duplicate detection, and paused-by-default creation.
+- [x] Add alert-rule schema and protected CRUD for source/tag scope, materiality threshold, keywords, severity, cooldown, and owner-alert eligibility.
+- [x] Apply matching alert rules to material change candidates while preserving human confirmation before external escalation.
+- [x] Add append-only change annotations and a comparison workspace for selected changes across sources and time periods.
+- [x] Add deterministic trend-anomaly detection for unusual change volume and fetch failure rates, with explainable baseline/threshold data and human triage status.
+- [x] Add dashboard and review interfaces for collections, alert rules, batch onboarding, annotations, comparisons, and anomaly triage.
+- [ ] Add focused unit/integration coverage and operating documentation for alert matching, batch onboarding, annotation ownership, and anomaly triage.
+- [ ] Add Sources filtering by collection, tag, steward, and source status with owner-scoped API support.
+- [ ] Add client-side batch-import preview with per-row validation feedback before paused-source creation.
+- [ ] Complete alert-rule update/delete flows and expose tag scope, cooldown, and owner-alert-eligibility controls.
+- [ ] Integrate annotations and selected-change comparison into Change review and add dashboard entry points for governance and anomaly triage.
 - [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.
 - [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
 - [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.

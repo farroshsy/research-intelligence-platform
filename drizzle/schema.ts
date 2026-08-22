@@ -48,6 +48,7 @@ export const sources = mysqlTable(
     ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 200 }).notNull(),
     description: text("description"),
+    steward: varchar("steward", { length: 160 }),
     sourceType: mysqlEnum("sourceType", sourceTypes).notNull(),
     url: varchar("url", { length: 2048 }).notNull(),
     checkCron: varchar("checkCron", { length: 100 }).notNull(),
@@ -193,6 +194,106 @@ export const changeEvents = mysqlTable(
     index("change_events_source_status_detected_idx").on(table.sourceId, table.status, table.detectedAt),
     index("change_events_status_detected_idx").on(table.status, table.detectedAt),
   ]
+);
+
+export const sourceCollections = mysqlTable(
+  "sourceCollections",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    color: varchar("color", { length: 20 }).default("teal").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [uniqueIndex("source_collections_owner_name_idx").on(table.ownerId, table.name)]
+);
+
+export const sourceCollectionMembers = mysqlTable(
+  "sourceCollectionMembers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    collectionId: int("collectionId").notNull().references(() => sourceCollections.id, { onDelete: "cascade" }),
+    sourceId: int("sourceId").notNull().references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("source_collection_members_unique_idx").on(table.collectionId, table.sourceId), index("source_collection_members_source_idx").on(table.sourceId)]
+);
+
+export const sourceTags = mysqlTable(
+  "sourceTags",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sourceId: int("sourceId").notNull().references(() => sources.id, { onDelete: "cascade" }),
+    tag: varchar("tag", { length: 80 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("source_tags_unique_idx").on(table.sourceId, table.tag), index("source_tags_tag_idx").on(table.tag)]
+);
+
+export const alertRules = mysqlTable(
+  "alertRules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 140 }).notNull(),
+    sourceId: int("sourceId").references(() => sources.id, { onDelete: "cascade" }),
+    collectionId: int("collectionId").references(() => sourceCollections.id, { onDelete: "cascade" }),
+    tag: varchar("tag", { length: 80 }),
+    keywords: json("keywords").$type<string[]>().notNull(),
+    minSignificance: mysqlEnum("minSignificance", ["low", "medium", "high"]).default("medium").notNull(),
+    severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+    cooldownMinutes: int("cooldownMinutes").default(60).notNull(),
+    ownerAlertEligible: boolean("ownerAlertEligible").default(false).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [index("alert_rules_owner_enabled_idx").on(table.ownerId, table.enabled), index("alert_rules_source_idx").on(table.sourceId)]
+);
+
+export const alertMatches = mysqlTable(
+  "alertMatches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    alertRuleId: int("alertRuleId").notNull().references(() => alertRules.id, { onDelete: "cascade" }),
+    changeEventId: int("changeEventId").notNull().references(() => changeEvents.id, { onDelete: "cascade" }),
+    status: mysqlEnum("status", ["matched", "dismissed", "acknowledged"]).default("matched").notNull(),
+    matchedAt: timestamp("matchedAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("alert_matches_rule_event_idx").on(table.alertRuleId, table.changeEventId), index("alert_matches_status_idx").on(table.status, table.matchedAt)]
+);
+
+export const changeAnnotations = mysqlTable(
+  "changeAnnotations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    changeEventId: int("changeEventId").notNull().references(() => changeEvents.id, { onDelete: "cascade" }),
+    authorId: int("authorId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    category: mysqlEnum("category", ["note", "decision", "follow_up"]).default("note").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("change_annotations_event_created_idx").on(table.changeEventId, table.createdAt)]
+);
+
+export const anomalyFindings = mysqlTable(
+  "anomalyFindings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceId: int("sourceId").notNull().references(() => sources.id, { onDelete: "cascade" }),
+    kind: mysqlEnum("kind", ["change_spike", "failure_spike"]).notNull(),
+    status: mysqlEnum("status", ["open", "acknowledged", "dismissed"]).default("open").notNull(),
+    observedValue: double("observedValue").notNull(),
+    baselineValue: double("baselineValue").notNull(),
+    thresholdValue: double("thresholdValue").notNull(),
+    explanation: text("explanation").notNull(),
+    detectedAt: timestamp("detectedAt").defaultNow().notNull(),
+    triagedAt: timestamp("triagedAt"),
+  },
+  table => [index("anomaly_findings_owner_status_idx").on(table.ownerId, table.status, table.detectedAt), uniqueIndex("anomaly_findings_source_kind_day_idx").on(table.sourceId, table.kind, table.detectedAt)]
 );
 
 export const evidence = mysqlTable(

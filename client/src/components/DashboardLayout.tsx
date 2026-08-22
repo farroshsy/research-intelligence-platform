@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
-import { Activity, BellRing, BrainCircuit, ChevronRight, FileBarChart, LayoutDashboard, LogOut, Moon, Radar, Settings2, Sun } from "lucide-react";
+import { Activity, BellRing, BrainCircuit, ChevronRight, FileBarChart, LayoutDashboard, LogOut, Moon, Radar, Settings2, Sun, Target } from "lucide-react";
 import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
 import { Button } from "./ui/button";
@@ -10,6 +10,7 @@ const navigation = [
   { label: "Sources", path: "/sources", icon: Radar },
   { label: "Change review", path: "/changes", icon: Activity },
   { label: "Intelligence", path: "/intelligence", icon: BrainCircuit },
+  { label: "Missions", path: "/missions", icon: Target },
   { label: "Reports", path: "/reports", icon: FileBarChart },
   { label: "Operations", path: "/operations", icon: Settings2 },
 ];

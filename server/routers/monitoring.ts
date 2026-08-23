@@ -22,6 +22,7 @@ import { COOKIE_NAME } from "../../shared/const";
 import { getDb } from "../db";
 import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
 import { protectedProcedure, router } from "../_core/trpc";
+import { requireOwnedSource } from "../domains/source-governance/ownership";
 import { confirmMaterialChange, createAdvisoryExplanation, resolveReviewStatus, runSourceCheck, validateExternalSourceUrl } from "../monitoring/service";
 import { deliveryReadiness } from "../monitoring/reportDelivery";
 
@@ -82,14 +83,6 @@ function insertId(result: unknown) {
   const id = Number((header as { insertId?: number }).insertId ?? 0);
   if (!id) throw new Error("Database insert did not return an identifier.");
   return id;
-}
-
-async function requireOwnedSource(ownerId: number, sourceId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
-  const source = (await db.select().from(sources).where(and(eq(sources.id, sourceId), eq(sources.ownerId, ownerId))).limit(1))[0];
-  if (!source) throw new Error("Source not found.");
-  return source;
 }
 
 async function activateSourceSchedule(sourceId: number, ownerId: number, token: string) {

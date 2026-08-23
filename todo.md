@@ -79,3 +79,7 @@
 - [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
 - [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.
 - [x] Add an in-product guided tutorial with route-aware steps, safe real-data prerequisites, progress state, and no fabricated examples.
+- [x] Complete a principal-level architecture reassessment with explicit alternatives, benefits, drawbacks, and selected upgrade rationale.
+- [x] Create a production README covering architecture, domains, security controls, development workflow, testing, operations, and real-use onboarding.
+- [x] Refactor high-churn server code into domain-owned modules with explicit ownership helpers and stable router composition, preserving existing API contracts.
+- [x] Validate the architecture upgrade with focused tests, full suite, type check, production build, and updated verification documentation.

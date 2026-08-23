@@ -2,7 +2,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Bot, CheckCircle2, Eye, FileWarning, ShieldAlert, Sparkles, XCircle } from "lucide-react";
+import { Bot, BookmarkPlus, CheckCircle2, Eye, FileWarning, GitCompareArrows, ShieldAlert, Sparkles, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -18,9 +18,14 @@ export default function Changes() {
   const queryId = Number(new URLSearchParams(location.split("?")[1] ?? "").get("id"));
   const [selectedId, setSelectedId] = useState<number | null>(Number.isFinite(queryId) && queryId > 0 ? queryId : null);
   const [notes, setNotes] = useState("");
+  const [annotationBody, setAnnotationBody] = useState("");
+  const [annotationCategory, setAnnotationCategory] = useState<"note" | "decision" | "follow_up">("note");
+  const [comparisonIds, setComparisonIds] = useState<number[]>([]);
   const utils = trpc.useUtils();
   const list = trpc.monitoring.changes.list.useQuery();
   const detail = trpc.monitoring.changes.detail.useQuery({ id: selectedId ?? 0 }, { enabled: Boolean(selectedId) });
+  const annotations = trpc.intelligence.changes.annotations.useQuery({ changeEventId: selectedId ?? 0 }, { enabled: Boolean(selectedId) });
+  const comparison = trpc.intelligence.changes.compare.useQuery({ ids: comparisonIds.length >= 2 ? comparisonIds : [1, 2] }, { enabled: comparisonIds.length >= 2 });
 
   useEffect(() => {
     if (!selectedId && list.data?.[0]) setSelectedId(list.data[0].event.id);
@@ -43,6 +48,7 @@ export default function Changes() {
     },
     onError: error => toast.error(error.message),
   });
+  const annotate = trpc.intelligence.changes.annotate.useMutation({ onSuccess: () => { setAnnotationBody(""); utils.intelligence.changes.annotations.invalidate({ changeEventId: selectedId ?? 0 }); toast.success("Append-only annotation added to this review trail."); }, onError: error => toast.error(error.message) });
 
   const item = detail.data;
   const choose = (id: number) => {
@@ -52,6 +58,7 @@ export default function Changes() {
   const decide = (decision: Decision) => {
     if (selectedId) review.mutate({ id: selectedId, decision, notes: notes || undefined });
   };
+  const toggleComparison = (id: number) => setComparisonIds(current => current.includes(id) ? current.filter(value => value !== id) : current.length >= 5 ? [...current.slice(1), id] : [...current, id]);
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 pb-20 lg:pb-0">
@@ -94,6 +101,8 @@ export default function Changes() {
                   </section>
                   <section className="rounded-2xl border border-white/8 bg-black/10 p-4"><p className="data-label">Reviewer record</p><Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional decision notes, assumptions, or follow-up context…" className="mt-3 min-h-24 border-white/10 bg-black/15 text-sm" /><div className="mt-4 grid gap-2"><Button onClick={() => decide("confirm_material")} disabled={review.isPending || item.event.status === "confirmed"} className="justify-start bg-emerald-300 text-emerald-950 hover:bg-emerald-200"><CheckCircle2 className="mr-2 h-4 w-4" /> Confirm material & notify owner</Button><div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => decide("needs_follow_up")} disabled={review.isPending} className="border-amber-200/16 bg-amber-200/6 text-amber-50 hover:bg-amber-200/12"><FileWarning className="mr-1.5 h-3.5 w-3.5" /> Follow up</Button><Button variant="outline" onClick={() => decide("not_material")} disabled={review.isPending} className="border-white/12 bg-white/4 text-slate-200 hover:bg-white/8"><XCircle className="mr-1.5 h-3.5 w-3.5" /> Not material</Button></div></div></section>
                   <section className="rounded-2xl border border-white/8 bg-black/10 p-4"><p className="data-label">Decision history</p>{item.reviews.length ? <div className="mt-3 space-y-3">{item.reviews.map(entry => <div key={entry.id} className="border-l border-white/10 pl-3"><p className="text-xs font-semibold">{entry.decision.replace(/_/g, " ")}</p><p className="mt-1 text-[0.68rem] text-slate-500">{formatDate(entry.reviewedAt)}{entry.notes ? ` · ${entry.notes}` : ""}</p></div>)}</div> : <p className="mt-3 text-xs leading-5 text-slate-500">No review decisions have been recorded yet.</p>}</section>
+                  <section className="rounded-2xl border border-white/8 bg-black/10 p-4"><div className="flex items-center gap-2"><BookmarkPlus className="h-4 w-4 text-primary" /><p className="data-label">Append-only review context</p></div><div className="mt-3 flex gap-2"><select value={annotationCategory} onChange={event => setAnnotationCategory(event.target.value as typeof annotationCategory)} className="h-9 rounded-md border border-white/10 bg-black/15 px-2 text-xs text-slate-200"><option value="note">Note</option><option value="decision">Decision context</option><option value="follow_up">Follow-up</option></select><Button size="sm" variant="outline" onClick={() => selectedId && annotate.mutate({ changeEventId: selectedId, body: annotationBody, category: annotationCategory })} disabled={!annotationBody.trim() || annotate.isPending} className="border-white/12 bg-white/4 text-slate-200 hover:bg-white/8">Add context</Button></div><Textarea value={annotationBody} onChange={event => setAnnotationBody(event.target.value)} placeholder="Record evidence context or a follow-up for the next reviewer…" className="mt-2 min-h-20 border-white/10 bg-black/15 text-sm" /><div className="mt-3 space-y-2">{annotations.data?.length ? annotations.data.map(entry => <div key={entry.id} className="border-l border-primary/30 pl-3"><p className="text-[0.65rem] font-semibold uppercase tracking-wide text-primary">{entry.category.replace(/_/g, " ")}</p><p className="mt-1 text-xs leading-5 text-slate-300">{entry.body}</p><p className="mt-1 text-[0.65rem] text-slate-500">{formatDate(entry.createdAt)}</p></div>) : <p className="text-xs leading-5 text-slate-500">No annotations yet. Add context without modifying preserved evidence or prior reviews.</p>}</div></section>
+                  <section className="rounded-2xl border border-white/8 bg-black/10 p-4"><div className="flex items-center gap-2"><GitCompareArrows className="h-4 w-4 text-primary" /><p className="data-label">Compare selected evidence</p></div><p className="mt-2 text-xs leading-5 text-slate-500">Select two to five owned changes to compare their classification, deterministic score, and changed fields beside this review.</p><div className="mt-3 max-h-40 divide-y divide-white/8 overflow-auto">{list.data?.slice(0, 30).map(({ event, source }) => <label key={event.id} className="flex cursor-pointer items-center gap-2 py-2 text-xs"><input type="checkbox" checked={comparisonIds.includes(event.id)} onChange={() => toggleComparison(event.id)} className="accent-primary" /><span className="min-w-0 flex-1 truncate text-slate-300">{source.name} · #{event.id}</span><span className="text-slate-500">{event.classification}</span></label>)}</div><div className="mt-3 rounded-xl border border-white/8 bg-black/15 p-3 text-xs leading-5 text-slate-400">{comparisonIds.length < 2 ? "Choose at least two changes to compare them." : comparison.data?.map(row => <p key={row.event.id} className="py-1"><span className="font-semibold text-slate-200">{row.source.name}</span> · {row.event.classification} · score {row.event.deterministicScore.toFixed(3)} · {row.event.changedFields.join(", ") || "no field summary"}</p>)}</div></section>
                 </div>
               </div>
             </div>

@@ -54,11 +54,11 @@
 - [x] Add append-only change annotations and a comparison workspace for selected changes across sources and time periods.
 - [x] Add deterministic trend-anomaly detection for unusual change volume and fetch failure rates, with explainable baseline/threshold data and human triage status.
 - [x] Add dashboard and review interfaces for collections, alert rules, batch onboarding, annotations, comparisons, and anomaly triage.
-- [ ] Add focused unit/integration coverage and operating documentation for alert matching, batch onboarding, annotation ownership, and anomaly triage.
+- [x] Add focused unit/integration coverage and operating documentation for alert matching, batch onboarding, annotation ownership, and anomaly triage.
 - [x] Add Sources filtering by collection, tag, steward, and source status with owner-scoped API support.
 - [x] Add client-side batch-import preview with per-row validation feedback before paused-source creation.
 - [x] Complete alert-rule update/delete flows and expose tag scope, cooldown, and owner-alert-eligibility controls.
-- [ ] Integrate annotations and selected-change comparison into Change review; dashboard entry points for governance and anomaly triage are complete.
+- [x] Integrate annotations and selected-change comparison into Change review; dashboard entry points for governance and anomaly triage are complete.
 - [x] Add collection filtering to Sources and cover combined collection, tag, steward, and status filtering behavior.
 - [x] Add focused coverage for combined collection, tag, steward, and status source filtering; updated Sources-page verification is complete.
 - [x] Reframe the platform around concrete research decisions, intended users, urgency, and measurable operational outcomes.

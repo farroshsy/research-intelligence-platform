@@ -26,6 +26,12 @@ Candidate material changes appear in **Change review** with a deterministic diff
 
 Only the **Confirm material & notify owner** decision changes a material candidate to confirmed and requests an immediate owner push notification. Cosmetic or no-change events cannot be confirmed as material. If delivery is temporarily unavailable, the database records the failed delivery and the reconciliation job retries it. A dashboard view alone is never required to receive this owner alert.
 
+Use **Intelligence** to govern the evidence boundary before asking the system to monitor more sources. Batch onboarding now previews each CSV-style row and rejects malformed URLs, unsupported types, invalid six-field UTC cron values, existing workspace URLs, and duplicates in the same submitted batch. Only the valid rows are sent to the server, and every accepted source begins **paused**. Review each preview row before creation; do not treat a successful import as authorization to activate the source.
+
+In the same workspace, alert rules can be scoped to all owned sources, one source, a collection, or a tag. Set a minimum materiality threshold, severity, cooldown, and whether a confirmed match is eligible for an owner alert. A rule match only prioritizes a candidate for review; it cannot send an external message or confirm a material change. Collection and source scopes are owner-validated at the API boundary.
+
+Use **Change review** for the actual evidentiary decision. The reviewer can attach append-only notes, decision context, or follow-up instructions and compare two to five owned change events beside the preserved evidence. These tools preserve context for future reviewers; they do not rewrite artifacts, alter an earlier review, or infer a new decision. In **Intelligence**, deterministic anomaly findings can be acknowledged or dismissed only by the finding owner after inspecting the published baseline and threshold.
+
 ## 6. Initial operating checklist
 
 | Check | Expected outcome |

@@ -248,10 +248,12 @@ describeWithDatabase("missions router integration", () => {
     await owner.actions.setStatus({ id: action.id, status: "completed", outcome: "Human review completed." });
     const actionRow = (await db.select().from(decisionActions).where(eq(decisionActions.id, action.id)).limit(1))[0];
     expect(actionRow?.outcome).toBe("Human review completed.");
+    expect(await owner.actions.listForMission({ missionId })).toHaveLength(1);
 
     const other = missionsRouter.createCaller(ctxFor(otherId, `brief-other-${suffix}`, "Brief other"));
     await expect(other.briefs.update({ id: briefId, ownerName: "Unauthorized" })).rejects.toThrow("Decision brief not found");
     await expect(other.actions.setStatus({ id: action.id, status: "cancelled" })).rejects.toThrow("Decision action not found");
+    await expect(other.actions.listForMission({ missionId })).rejects.toThrow("Mission not found");
   });
 
   it("persists the tailored career materiality policy supplied for a human-reviewed mission", async () => {

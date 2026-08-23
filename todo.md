@@ -73,8 +73,9 @@
 - [x] Add retrieval-assisted investigation restricted to preserved evidence, explicit citations, uncertainty labels, and no autonomous action path.
 - [x] Rank and select question-relevant mission evidence, including linked preserved change evidence where available, before advisory investigation.
 - [x] Surface unsupported evidence gaps in Mission Control investigation results and add end-to-end retrieval/citation validation coverage.
-- [ ] Add a unified mission-control workspace with focused tests, documentation, and responsive verification for the complete workflow.
+- [x] Add a unified mission-control workspace with focused tests, documentation, and responsive verification for the complete workflow.
 - [x] Implement career and procurement/policy mission presets with tailored materiality defaults, recommended brief structures, guided fields, and focused verification.
 - [x] Persist failed scheduled report deliveries as retry records and process them through reconciliation without duplicating successful channel sends.
 - [x] Add focused coverage for report-delivery fallback order and persisted retry behavior.
 - [x] Re-verify the updated Reports template and delivery controls at a mobile viewport and record the findings.
+- [x] Add an in-product guided tutorial with route-aware steps, safe real-data prerequisites, progress state, and no fabricated examples.

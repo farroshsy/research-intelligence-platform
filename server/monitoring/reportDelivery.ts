@@ -3,6 +3,7 @@ import { changeEvents, recoveryRecords, reportDeliveries, reportDeliveryAttempts
 import { getDb } from "../db";
 
 type Provider = "resend" | "gmail" | "outlook";
+type AttemptKind = "scheduled" | "reconciliation" | "manual_test";
 type Delivery = typeof reportDeliveries.$inferSelect;
 
 export function isProviderConfigured(provider: Provider): boolean {
@@ -58,17 +59,19 @@ async function sendSlack(subject: string, summary: string) {
   if (!response.ok) throw new Error(`Slack delivery failed: ${response.status} ${await response.text()}`);
 }
 
-export async function deliverScheduledReport(delivery: Delivery, options: { alreadyDelivered?: string[]; createRetry?: boolean } = {}) {
+async function deliverReport(delivery: Delivery, options: { alreadyDelivered?: string[]; createRetry?: boolean; attemptKind?: AttemptKind; requireEnabled?: boolean } = {}) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
-  if (!delivery.enabled) return { ok: true, skipped: "paused" as const };
+  const attemptKind = options.attemptKind ?? "scheduled";
+  if ((options.requireEnabled ?? true) && !delivery.enabled) return { ok: true, skipped: "paused" as const };
   const readiness = deliveryReadiness(delivery);
   if (!readiness.email || !readiness.slack) return { ok: false, retryable: false, error: "Delivery credentials are not ready for the selected email provider or Slack channel." };
   const report = await compiledDeliveryReport(delivery);
-  const subject = `Research Intelligence · ${delivery.name} · ${report.summary.recordCount} changes`;
+  const subject = attemptKind === "manual_test" ? `Research Intelligence · Test notification · ${delivery.name}` : `Research Intelligence · ${delivery.name} · ${report.summary.recordCount} changes`;
   const plain = reportText(report.records);
-  const html = `<h2>${escapeHtml(subject)}</h2><p>Material changes: <strong>${report.summary.materialCount}</strong></p><pre>${escapeHtml(plain || "No detected changes matched this report.")}</pre>`;
-  const insert = await db.insert(reportDeliveryAttempts).values({ deliveryId: delivery.id, status: "running", providersAttempted: [], deliveredProviders: [], reportSummary: report.summary });
+  const testNotice = attemptKind === "manual_test" ? "<p><strong>This is a deliberate credential-verification test. It does not activate or change the schedule.</strong></p>" : "";
+  const html = `<h2>${escapeHtml(subject)}</h2>${testNotice}<p>Material changes: <strong>${report.summary.materialCount}</strong></p><pre>${escapeHtml(plain || "No detected changes matched this report.")}</pre>`;
+  const insert = await db.insert(reportDeliveryAttempts).values({ deliveryId: delivery.id, attemptKind, status: "running", providersAttempted: [], deliveredProviders: [], reportSummary: { ...report.summary, attemptKind } });
   const attemptId = Number((Array.isArray(insert) ? insert[0] : insert as { insertId?: number }).insertId ?? 0);
   const attempted: string[] = []; const delivered: string[] = Array.from(new Set(options.alreadyDelivered ?? [])); const errors: string[] = [];
   if (delivery.slackEnabled && !delivered.includes("slack")) { attempted.push("slack"); try { await sendSlack(subject, plain); delivered.push("slack"); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); } }
@@ -93,6 +96,14 @@ export async function deliverScheduledReport(delivery: Delivery, options: { alre
   const retryNeeded = !emailDelivered || !slackDelivered;
   await db.update(reportDeliveryAttempts).set({ status, providersAttempted: attempted, deliveredProviders: delivered, errorSummary: errors.join("\n") || null, completedAt: new Date() }).where(eq(reportDeliveryAttempts.id, attemptId));
   await db.update(reportDeliveries).set({ lastAttemptAt: new Date() }).where(eq(reportDeliveries.id, delivery.id));
-  if (retryNeeded && options.createRetry !== false) await db.insert(recoveryRecords).values({ reportDeliveryId: delivery.id, kind: "report_retry", status: "pending", retryCount: 0, nextAttemptAt: new Date(Date.now() + 5 * 60_000), lastError: errors.join("\n") || "One or more delivery channels did not accept the report.", details: { deliveredProviders: delivered, attemptedProviders: attempted, attemptId } });
+  if (retryNeeded && options.createRetry !== false && attemptKind !== "manual_test") await db.insert(recoveryRecords).values({ reportDeliveryId: delivery.id, kind: "report_retry", status: "pending", retryCount: 0, nextAttemptAt: new Date(Date.now() + 5 * 60_000), lastError: errors.join("\n") || "One or more delivery channels did not accept the report.", details: { deliveredProviders: delivered, attemptedProviders: attempted, attemptId } });
   return { ok: true, pendingRetry: retryNeeded, status, delivered, errors };
+}
+
+export async function deliverScheduledReport(delivery: Delivery, options: { alreadyDelivered?: string[]; createRetry?: boolean; attemptKind?: "scheduled" | "reconciliation" } = {}) {
+  return deliverReport(delivery, options);
+}
+
+export async function deliverTestNotification(delivery: Delivery) {
+  return deliverReport(delivery, { attemptKind: "manual_test", requireEnabled: false, createRetry: false });
 }

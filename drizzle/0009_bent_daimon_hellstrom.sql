@@ -1,0 +1,1 @@
+ALTER TABLE `reportDeliveryAttempts` ADD `attemptKind` enum('scheduled','reconciliation','manual_test') DEFAULT 'scheduled' NOT NULL;

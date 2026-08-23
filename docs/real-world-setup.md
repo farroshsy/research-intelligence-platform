@@ -79,6 +79,10 @@ Open **Notifications** to review real, owner-scoped delivery state: credential r
 
 Open **Notification preferences** to enable or disable **email reports** and **Slack summaries** independently for each saved delivery. At least one channel must remain selected. Changing a channel preference is durable but does not create, activate, pause, or run a schedule; scheduled delivery remains credential-gated and must still be deliberately activated from **Reports**. When an enabled schedule runs, only its selected channels are evaluated for readiness and delivery.
 
+Use the **Searchable Slack and email history** controls in **Notifications** to narrow owner-scoped audit records by delivery name, delivery configuration, outcome, and origin (**Scheduled**, **Recovery retry**, or **Manual test**). You can deterministically sort the matching records by newest, oldest, outcome, or delivery name. Hover the status and retry-context labels for an explanation of the final outcome, whether a retry is pending, and why a manual test has no automatic retry.
+
+In **Notification preferences**, **Send test notification** becomes available only when all selected channels are credential-ready. Selecting it opens a second confirmation that states it will send a real, clearly labeled credential-verification message to the configured email recipients and/or Slack webhook. Confirming the dialog records a **Manual test** attempt in the delivery audit but does not activate, pause, modify, or retry the schedule automatically. Canceling the dialog sends nothing.
+
 ## References
 
 [1]: https://api.slack.com/messaging/webhooks "Slack: Sending messages using incoming webhooks"

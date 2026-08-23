@@ -614,7 +614,7 @@ export async function reconcileMonitoring() {
       continue;
     }
     const details = record.details as { deliveredProviders?: string[] };
-    const result = await deliverScheduledReport(delivery, { alreadyDelivered: Array.isArray(details.deliveredProviders) ? details.deliveredProviders : [], createRetry: false });
+    const result = await deliverScheduledReport(delivery, { alreadyDelivered: Array.isArray(details.deliveredProviders) ? details.deliveredProviders : [], createRetry: false, attemptKind: "reconciliation" });
     reportRetries += 1;
     if (!result.pendingRetry) {
       await db.update(recoveryRecords).set({ status: "succeeded", resolvedAt: new Date(), lastError: null, details: { ...details, deliveredProviders: result.delivered } }).where(eq(recoveryRecords.id, record.id));

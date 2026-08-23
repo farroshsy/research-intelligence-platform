@@ -40,6 +40,7 @@ export const workflowStatuses = ["running", "succeeded", "partial", "failed"] as
 export const recoveryKinds = ["fetch_retry", "notification_retry", "stuck_run", "report_retry"] as const;
 export const recoveryStatuses = ["pending", "succeeded", "abandoned"] as const;
 export const deliveryStatuses = ["pending", "running", "succeeded", "partial", "failed"] as const;
+export const deliveryAttemptKinds = ["scheduled", "reconciliation", "manual_test"] as const;
 
 export const sources = mysqlTable(
   "sources",
@@ -449,6 +450,7 @@ export const reportDeliveryAttempts = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     deliveryId: int("deliveryId").notNull().references(() => reportDeliveries.id, { onDelete: "cascade" }),
+    attemptKind: mysqlEnum("attemptKind", deliveryAttemptKinds).default("scheduled").notNull(),
     status: mysqlEnum("status", deliveryStatuses).default("pending").notNull(),
     providersAttempted: json("providersAttempted").$type<string[]>().notNull(),
     deliveredProviders: json("deliveredProviders").$type<string[]>().notNull(),

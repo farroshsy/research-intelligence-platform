@@ -86,3 +86,7 @@
 - [x] Add an owner-scoped notification dashboard showing Slack/email delivery readiness, recent attempts, outcomes, and recovery context without fabricating activity.
 - [x] Add owner-scoped notification preferences to enable/disable Slack and email per scheduled report while preserving credential-gated delivery safeguards.
 - [x] Add focused coverage, responsive validation, and operating documentation for notification visibility and preference controls.
+- [x] Add owner-scoped filtering and deterministic sorting for historical Slack/email delivery attempts.
+- [x] Add accessible delivery-status and retry-context tooltips to notification history entries.
+- [x] Add a credential-readiness-aware test-notification control with explicit outbound-send confirmation and durable audit records.
+- [x] Add focused tests, responsive validation, and operating documentation for notification audit discovery and test-send safeguards.

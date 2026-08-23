@@ -431,6 +431,7 @@ export const reportDeliveries = mysqlTable(
     recipients: json("recipients").$type<string[]>().notNull(),
     primaryEmailProvider: mysqlEnum("primaryEmailProvider", ["resend", "gmail", "outlook"]).notNull(),
     fallbackProviders: json("fallbackProviders").$type<string[]>().notNull(),
+    emailEnabled: boolean("emailEnabled").default(true).notNull(),
     slackEnabled: boolean("slackEnabled").default(true).notNull(),
     filters: json("filters").$type<JsonObject>().notNull(),
     lastAttemptAt: timestamp("lastAttemptAt"),

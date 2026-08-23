@@ -11,8 +11,8 @@ export function isProviderConfigured(provider: Provider): boolean {
   return Boolean(process.env.OUTLOOK_ACCESS_TOKEN);
 }
 
-export function deliveryReadiness(delivery: Pick<Delivery, "primaryEmailProvider" | "slackEnabled">) {
-  return { email: isProviderConfigured(delivery.primaryEmailProvider), slack: !delivery.slackEnabled || Boolean(process.env.SLACK_WEBHOOK_URL) };
+export function deliveryReadiness(delivery: Pick<Delivery, "primaryEmailProvider" | "emailEnabled" | "slackEnabled">) {
+  return { email: !delivery.emailEnabled || isProviderConfigured(delivery.primaryEmailProvider), slack: !delivery.slackEnabled || Boolean(process.env.SLACK_WEBHOOK_URL) };
 }
 
 export function orderedEmailProviders(primary: Provider, fallbacks: string[]): Provider[] {
@@ -72,20 +72,22 @@ export async function deliverScheduledReport(delivery: Delivery, options: { alre
   const attemptId = Number((Array.isArray(insert) ? insert[0] : insert as { insertId?: number }).insertId ?? 0);
   const attempted: string[] = []; const delivered: string[] = Array.from(new Set(options.alreadyDelivered ?? [])); const errors: string[] = [];
   if (delivery.slackEnabled && !delivered.includes("slack")) { attempted.push("slack"); try { await sendSlack(subject, plain); delivered.push("slack"); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); } }
-  const providerOrder = orderedEmailProviders(delivery.primaryEmailProvider, delivery.fallbackProviders as string[]);
-  for (const provider of providerOrder) {
-    if (delivered.includes(provider)) break;
-    attempted.push(provider);
-    if (!isProviderConfigured(provider)) { errors.push(`${provider} is not configured.`); continue; }
-    try {
-      if (provider === "resend") await sendResend(delivery.recipients, subject, html, `research-delivery-${delivery.id}-${new Date().toISOString().slice(0, 16)}`);
-      else if (provider === "gmail") await sendGmail(delivery.recipients, subject, html);
-      else await sendOutlook(delivery.recipients, subject, html);
-      delivered.push(provider);
-      break;
-    } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+  if (delivery.emailEnabled) {
+    const providerOrder = orderedEmailProviders(delivery.primaryEmailProvider, delivery.fallbackProviders as string[]);
+    for (const provider of providerOrder) {
+      if (delivered.includes(provider)) break;
+      attempted.push(provider);
+      if (!isProviderConfigured(provider)) { errors.push(`${provider} is not configured.`); continue; }
+      try {
+        if (provider === "resend") await sendResend(delivery.recipients, subject, html, `research-delivery-${delivery.id}-${new Date().toISOString().slice(0, 16)}`);
+        else if (provider === "gmail") await sendGmail(delivery.recipients, subject, html);
+        else await sendOutlook(delivery.recipients, subject, html);
+        delivered.push(provider);
+        break;
+      } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+    }
   }
-  const emailDelivered = delivered.some(item => item === "resend" || item === "gmail" || item === "outlook");
+  const emailDelivered = !delivery.emailEnabled || delivered.some(item => item === "resend" || item === "gmail" || item === "outlook");
   const slackDelivered = !delivery.slackEnabled || delivered.includes("slack");
   const status = emailDelivered && slackDelivered ? "succeeded" : delivered.length ? "partial" : "failed";
   const retryNeeded = !emailDelivered || !slackDelivered;

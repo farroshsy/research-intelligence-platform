@@ -73,6 +73,12 @@ Add these values through the project’s secure secrets settings, never in a sou
 
 The platform sends through **one selected primary email provider** for each schedule and can optionally post the Slack summary. It does not intentionally duplicate emails through every provider. You can select Gmail, Outlook, or Resend as ordered fallbacks; a fallback is used only when the earlier configured email provider cannot accept the message. If you change providers, pause the schedule, update the selected provider or fallbacks, confirm readiness, and reactivate it.
 
+## 10. Review notification status and preferences
+
+Open **Notifications** to review real, owner-scoped delivery state: credential readiness by provider, saved schedules, active-schedule count, recent Slack/email attempts, and pending report-retry records. An empty history means no report delivery attempt has been recorded; it does not imply that a message was sent or failed.
+
+Open **Notification preferences** to enable or disable **email reports** and **Slack summaries** independently for each saved delivery. At least one channel must remain selected. Changing a channel preference is durable but does not create, activate, pause, or run a schedule; scheduled delivery remains credential-gated and must still be deliberately activated from **Reports**. When an enabled schedule runs, only its selected channels are evaluated for readiness and delivery.
+
 ## References
 
 [1]: https://api.slack.com/messaging/webhooks "Slack: Sending messages using incoming webhooks"

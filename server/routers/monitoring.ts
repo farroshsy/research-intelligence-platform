@@ -22,6 +22,7 @@ import { COOKIE_NAME } from "../../shared/const";
 import { getDb } from "../db";
 import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
 import { protectedProcedure, router } from "../_core/trpc";
+import { getOwnerNotificationCenter, requireOwnedReportDelivery, updateOwnedNotificationChannels } from "../domains/notification-center/service";
 import { requireOwnedSource } from "../domains/source-governance/ownership";
 import { confirmMaterialChange, createAdvisoryExplanation, resolveReviewStatus, runSourceCheck, validateExternalSourceUrl } from "../monitoring/service";
 import { deliveryReadiness } from "../monitoring/reportDelivery";
@@ -66,11 +67,15 @@ const deliveryInput = z.object({
   name: z.string().trim().min(2).max(140),
   templateId: z.number().int().positive().nullable().optional(),
   cron: cronSchema,
-  recipients: z.array(z.string().trim().email().max(320)).min(1).max(50),
+  recipients: z.array(z.string().trim().email().max(320)).max(50).default([]),
   primaryEmailProvider: z.enum(["resend", "gmail", "outlook"]),
   fallbackProviders: z.array(z.enum(["resend", "gmail", "outlook"])).max(2).default([]),
+  emailEnabled: z.boolean().default(true),
   slackEnabled: z.boolean().default(true),
   filters: storedReportFiltersSchema,
+}).superRefine((value, ctx) => {
+  if (!value.emailEnabled && !value.slackEnabled) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enable at least one notification channel." });
+  if (value.emailEnabled && value.recipients.length === 0) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["recipients"], message: "Add at least one email recipient when email delivery is enabled." });
 });
 
 function sessionToken(headers: Record<string, string | string[] | undefined>) {
@@ -100,18 +105,10 @@ async function activateSourceSchedule(sourceId: number, ownerId: number, token: 
   return taskUid;
 }
 
-async function requireOwnedDelivery(ownerId: number, deliveryId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
-  const delivery = (await db.select().from(reportDeliveries).where(and(eq(reportDeliveries.id, deliveryId), eq(reportDeliveries.ownerId, ownerId))).limit(1))[0];
-  if (!delivery) throw new Error("Scheduled delivery not found.");
-  return delivery;
-}
-
 async function activateDeliverySchedule(deliveryId: number, ownerId: number, token: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
-  const delivery = await requireOwnedDelivery(ownerId, deliveryId);
+  const delivery = await requireOwnedReportDelivery(ownerId, deliveryId);
   let taskUid = delivery.scheduleCronTaskUid;
   if (taskUid) await updateHeartbeatJob(taskUid, { cron: delivery.cron, path: "/api/scheduled/report-delivery", enable: true, description: `Send report ${delivery.name}` }, token);
   else taskUid = (await createHeartbeatJob({ name: `research-report-${delivery.id}`, cron: delivery.cron, path: "/api/scheduled/report-delivery", payload: {}, description: `Send report ${delivery.name}` }, token)).taskUid;
@@ -311,13 +308,15 @@ export const monitoringRouter = router({
       remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.delete(reportTemplates).where(and(eq(reportTemplates.id, input.id), eq(reportTemplates.ownerId, ctx.user.id))); return { success: true }; }),
     }),
     deliveryConfiguration: protectedProcedure.query(() => ({ slack: Boolean(process.env.SLACK_WEBHOOK_URL), resend: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL), gmail: Boolean(process.env.GMAIL_ACCESS_TOKEN), outlook: Boolean(process.env.OUTLOOK_ACCESS_TOKEN) })),
+    notificationCenter: protectedProcedure.query(({ ctx }) => getOwnerNotificationCenter(ctx.user.id)),
     deliveries: router({
       list: protectedProcedure.query(async ({ ctx }) => { const db = await getDb(); if (!db) return []; const deliveries = await db.select().from(reportDeliveries).where(eq(reportDeliveries.ownerId, ctx.user.id)).orderBy(desc(reportDeliveries.updatedAt)); return Promise.all(deliveries.map(async delivery => ({ delivery, attempts: await db.select().from(reportDeliveryAttempts).where(eq(reportDeliveryAttempts.deliveryId, delivery.id)).orderBy(desc(reportDeliveryAttempts.startedAt)).limit(3) }))); }),
       create: protectedProcedure.input(deliveryInput).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new Error("Database is unavailable."); if (input.templateId) { const template = (await db.select().from(reportTemplates).where(and(eq(reportTemplates.id, input.templateId), eq(reportTemplates.ownerId, ctx.user.id))).limit(1))[0]; if (!template) throw new Error("Report template not found."); } const result = await db.insert(reportDeliveries).values({ ...input, ownerId: ctx.user.id, templateId: input.templateId ?? null, fallbackProviders: Array.from(new Set(input.fallbackProviders.filter(provider => provider !== input.primaryEmailProvider))), enabled: false }); return { id: insertId(result) }; }),
-      update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: deliveryInput.partial() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); if (delivery.enabled && input.patch.cron && delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { cron: input.patch.cron }, sessionToken(ctx.req.headers)); await db.update(reportDeliveries).set(input.patch).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
-      activate: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); const readiness = deliveryReadiness(delivery); if (!readiness.email || !readiness.slack) throw new Error("Connect the selected email provider and any selected Slack channel before activating this schedule."); return { taskUid: await activateDeliverySchedule(input.id, ctx.user.id, sessionToken(ctx.req.headers)) }; }),
-      pause: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { enable: false }, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.update(reportDeliveries).set({ enabled: false }).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
-      remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await deleteHeartbeatJob(delivery.scheduleCronTaskUid, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.delete(reportDeliveries).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
+      update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: deliveryInput.partial() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedReportDelivery(ctx.user.id, input.id); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); if (delivery.enabled && input.patch.cron && delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { cron: input.patch.cron }, sessionToken(ctx.req.headers)); await db.update(reportDeliveries).set(input.patch).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
+      updateNotificationChannels: protectedProcedure.input(z.object({ id: z.number().int().positive(), emailEnabled: z.boolean(), slackEnabled: z.boolean() })).mutation(async ({ ctx, input }) => updateOwnedNotificationChannels(ctx.user.id, input)),
+      activate: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedReportDelivery(ctx.user.id, input.id); const readiness = deliveryReadiness(delivery); if (!readiness.email || !readiness.slack) throw new Error("Connect the selected email provider and any selected Slack channel before activating this schedule."); return { taskUid: await activateDeliverySchedule(input.id, ctx.user.id, sessionToken(ctx.req.headers)) }; }),
+      pause: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedReportDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await updateHeartbeatJob(delivery.scheduleCronTaskUid, { enable: false }, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.update(reportDeliveries).set({ enabled: false }).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
+      remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const delivery = await requireOwnedReportDelivery(ctx.user.id, input.id); if (delivery.scheduleCronTaskUid) await deleteHeartbeatJob(delivery.scheduleCronTaskUid, sessionToken(ctx.req.headers)); const db = await getDb(); if (!db) throw new Error("Database is unavailable."); await db.delete(reportDeliveries).where(eq(reportDeliveries.id, delivery.id)); return { success: true }; }),
     }),
   }),
 });

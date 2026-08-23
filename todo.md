@@ -83,3 +83,6 @@
 - [x] Create a production README covering architecture, domains, security controls, development workflow, testing, operations, and real-use onboarding.
 - [x] Refactor high-churn server code into domain-owned modules with explicit ownership helpers and stable router composition, preserving existing API contracts.
 - [x] Validate the architecture upgrade with focused tests, full suite, type check, production build, and updated verification documentation.
+- [x] Add an owner-scoped notification dashboard showing Slack/email delivery readiness, recent attempts, outcomes, and recovery context without fabricating activity.
+- [x] Add owner-scoped notification preferences to enable/disable Slack and email per scheduled report while preserving credential-gated delivery safeguards.
+- [x] Add focused coverage, responsive validation, and operating documentation for notification visibility and preference controls.

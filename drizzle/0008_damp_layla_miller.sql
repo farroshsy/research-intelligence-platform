@@ -1,0 +1,1 @@
+ALTER TABLE `reportDeliveries` ADD `emailEnabled` boolean DEFAULT true NOT NULL;
